@@ -1,6 +1,7 @@
 import copy
 import operator
 import threading
+import typing
 from datetime import datetime, timedelta
 
 import pywebio
@@ -13,7 +14,7 @@ from module.config.config_updater import ConfigUpdater, ensure_time, get_server_
 from module.config.deep import deep_get, deep_set
 from module.config.stored.classes import iter_attribute
 from module.config.stored.stored_generated import StoredGenerated
-from module.config.utils import DEFAULT_TIME, dict_to_kv, filepath_config, path_to_arg
+from module.config.utils import DEFAULT_TIME, dict_to_kv, filepath_config, path_to_arg, filepath_args
 from module.config.watcher import ConfigWatcher
 from module.exception import RequestHumanTakeover, ScriptError
 from module.logger import logger
@@ -66,7 +67,7 @@ def name_to_function(name):
     return function
 
 
-class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher):
+class AzurLaneConfig(ManualConfig, GeneratedConfig):
     """
     配置管理类
     负责管理游戏配置、任务调度和状态维护
@@ -122,6 +123,11 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         self.task: Function
         # 模板配置用于开发工具
         self.is_template_config = config_name.startswith("template")
+        # 配置监视器
+        self._config_watcher = ConfigWatcher()
+        self._config_watcher.config_name = config_name
+        # 配置更新器
+        self._config_updater = ConfigUpdater()
 
         if self.is_template_config:
             # 用于开发工具
@@ -375,7 +381,7 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
 
         limit_next_run(['BattlePass'], limit=now + timedelta(days=40, seconds=-1))
         limit_next_run(['Weekly'], limit=now + timedelta(days=7, seconds=-1))
-        limit_next_run(self.args.keys(), limit=now + timedelta(hours=24, seconds=-1))
+        limit_next_run(self._config_updater.args.keys(), limit=now + timedelta(hours=24, seconds=-1))
 
     def override(self, **kwargs):
         """
@@ -671,6 +677,70 @@ class AzurLaneConfig(ConfigUpdater, ManualConfig, GeneratedConfig, ConfigWatcher
         backup = ConfigBackup(config=self)
         backup.cover(**kwargs)
         return backup
+
+    def start_watching(self) -> None:
+        """
+        开始监视配置文件
+        """
+        self._config_watcher.start_watching()
+
+    def should_reload(self) -> bool:
+        """
+        检查配置文件是否需要重新加载
+        
+        Returns:
+            bool: 如果配置文件被修改过，返回True，否则返回False
+        """
+        return self._config_watcher.should_reload()
+
+    def read_file(self, config_name, is_template=False):
+        """
+        读取配置文件
+        
+        Args:
+            config_name (str): 配置名称
+            is_template (bool): 是否为模板配置
+            
+        Returns:
+            dict: 配置数据
+        """
+        return self._config_updater.read_file(config_name, is_template=is_template)
+
+    def write_file(self, config_name, data, mod_name='alas'):
+        """
+        写入配置文件
+        
+        Args:
+            config_name (str): 配置名称
+            data (dict): 配置数据
+            mod_name (str): 模块名称
+        """
+        self._config_updater.write_file(config_name, data, mod_name=mod_name)
+
+    def save_callback(self, key: str, value: typing.Any) -> typing.Iterable[typing.Tuple[str, typing.Any]]:
+        """
+        配置保存回调函数
+        
+        Args:
+            key (str): 配置键
+            value (Any): 配置值
+            
+        Yields:
+            Tuple[str, Any]: 需要设置的配置项键值对
+        """
+        return self._config_updater.save_callback(key, value)
+
+    def get_hidden_args(self, data) -> typing.Set[str]:
+        """
+        获取需要隐藏的配置项
+        
+        Args:
+            data (dict): 配置数据
+            
+        Returns:
+            Set[str]: 需要隐藏的配置项路径集合
+        """
+        return self._config_updater.get_hidden_args(data)
 
 
 pywebio.output.Output = OutputConfig

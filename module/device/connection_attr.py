@@ -28,10 +28,7 @@ class ConnectionAttr:
             config (AzurLaneConfig, str): Name of the user config under ./config
         """
         logger.hr('Device', level=1)
-        if isinstance(config, str):
-            self.config = AzurLaneConfig(config, task=None)
-        else:
-            self.config = config
+        self.config = config
 
         # Init adb client
         logger.attr('AdbBinary', self.adb_binary)

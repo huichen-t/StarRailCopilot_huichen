@@ -19,14 +19,16 @@ from tasks.map.assets.assets_map_control import RUN_BUTTON
 
 
 class UI(MainPage):
+    """UI界面处理类，用于处理游戏中的各种界面切换和交互"""
     ui_current: Page
     ui_main_confirm_timer = Timer(0.2, count=0)
 
     def ui_page_appear(self, page, interval=0):
         """
+        检查指定页面是否出现
         Args:
-            page (Page):
-            interval:
+            page (Page): 要检查的页面
+            interval: 检查间隔时间
         """
         if page == page_main:
             return self.is_in_main(interval=interval)
@@ -34,34 +36,39 @@ class UI(MainPage):
 
     def ui_get_current_page(self, skip_first_screenshot=True):
         """
+        获取当前页面
         Args:
-            skip_first_screenshot:
+            skip_first_screenshot: 是否跳过第一次截图
 
         Returns:
-            Page:
+            Page: 当前页面
 
         Raises:
-            GameNotRunningError:
-            GamePageUnknownError:
+            GameNotRunningError: 游戏未运行
+            GamePageUnknownError: 未知页面
         """
         logger.info("UI get current page")
 
         @run_once
         def app_check():
+            """检查游戏是否运行"""
             if not self.device.app_is_running():
                 raise GameNotRunningError("Game not running")
 
         @run_once
         def minicap_check():
+            """检查并卸载minicap"""
             if self.config.Emulator_ControlMethod == "uiautomator2":
                 self.device.uninstall_minicap()
 
         @run_once
         def rotation_check():
+            """检查屏幕方向"""
             self.device.get_orientation()
 
         @run_once
         def cloud_login():
+            """处理云游戏登录"""
             if self.config.is_cloud_game:
                 from tasks.login.login import Login
                 login = Login(config=self.config, device=self.device)
@@ -77,11 +84,11 @@ class UI(MainPage):
             else:
                 self.device.screenshot()
 
-            # End
+            # 结束检查
             if timeout.reached():
                 break
 
-            # Known pages
+            # 检查已知页面
             for page in Page.iter_pages():
                 if page.check_button is None:
                     continue
@@ -90,7 +97,7 @@ class UI(MainPage):
                     self.ui_current = page
                     return page
 
-            # Unknown page but able to handle
+            # 处理未知页面
             logger.info("Unknown ui page")
             if self.ui_additional():
                 timeout.reset()
@@ -113,7 +120,7 @@ class UI(MainPage):
             rotation_check()
             cloud_login()
 
-        # Unknown page, need manual switching
+        # 未知页面，需要手动切换
         logger.warning("Unknown ui page")
         logger.attr("EMULATOR__SCREENSHOT_METHOD", self.config.Emulator_ScreenshotMethod)
         logger.attr("EMULATOR__CONTROL_METHOD", self.config.Emulator_ControlMethod)
@@ -126,11 +133,12 @@ class UI(MainPage):
 
     def ui_goto(self, destination, skip_first_screenshot=True):
         """
+        跳转到指定页面
         Args:
-            destination (Page):
-            skip_first_screenshot:
+            destination (Page): 目标页面
+            skip_first_screenshot: 是否跳过第一次截图
         """
-        # Create connection
+        # 创建页面连接
         Page.init_connection(destination)
         self.interval_clear(list(Page.iter_check_buttons()))
 
@@ -141,14 +149,14 @@ class UI(MainPage):
             else:
                 self.device.screenshot()
 
-            # Destination page
+            # 到达目标页面
             if self.ui_page_appear(destination):
                 logger.info(f'Page arrive: {destination}')
                 if self.ui_page_confirm(destination):
                     logger.info(f'Page arrive confirm {destination}')
                 break
 
-            # Other pages
+            # 处理其他页面
             clicked = False
             for page in Page.iter_pages():
                 if page.parent is None or page.check_button is None:
@@ -166,7 +174,7 @@ class UI(MainPage):
             if clicked:
                 continue
 
-            # Additional
+            # 处理额外情况
             if self.ui_additional():
                 continue
             if self.handle_popup_single():
@@ -176,18 +184,19 @@ class UI(MainPage):
             if self.handle_login_confirm():
                 continue
 
-        # Reset connection
+        # 重置页面连接
         Page.clear_connection()
 
     def ui_ensure(self, destination, acquire_lang_checked=True, skip_first_screenshot=True):
         """
+        确保在指定页面
         Args:
-            destination (Page):
-            acquire_lang_checked:
-            skip_first_screenshot:
+            destination (Page): 目标页面
+            acquire_lang_checked: 是否需要检查语言
+            skip_first_screenshot: 是否跳过第一次截图
 
         Returns:
-            bool: If UI switched.
+            bool: 是否进行了页面切换
         """
         logger.hr("UI ensure")
         self.ui_get_current_page(skip_first_screenshot=skip_first_screenshot)
@@ -217,14 +226,15 @@ class UI(MainPage):
             interval=(0.2, 0.3),
     ):
         """
+        确保在指定索引位置
         Args:
-            index (int):
-            letter (Ocr, callable): OCR button.
-            next_button (Button):
-            prev_button (Button):
-            skip_first_screenshot (bool):
-            fast (bool): Default true. False when index is not continuous.
-            interval (tuple, int, float): Seconds between two click.
+            index (int): 目标索引
+            letter (Ocr, callable): OCR按钮或回调函数
+            next_button (Button): 下一个按钮
+            prev_button (Button): 上一个按钮
+            skip_first_screenshot (bool): 是否跳过第一次截图
+            fast (bool): 是否快速切换，默认为True。当索引不连续时设为False
+            interval (tuple, int, float): 两次点击之间的间隔时间
         """
         logger.hr("UI ensure index")
         retry = Timer(1, count=2)
@@ -265,19 +275,21 @@ class UI(MainPage):
             skip_first_screenshot=True,
     ):
         """
+        点击UI元素
         Args:
-            click_button (ButtonWrapper):
-            check_button (ButtonWrapper, callable, list[ButtonWrapper], tuple[ButtonWrapper]):
-            appear_button (ButtonWrapper, callable, list[ButtonWrapper], tuple[ButtonWrapper]):
-            additional (callable):
-            retry_wait (int, float):
-            skip_first_screenshot (bool):
+            click_button (ButtonWrapper): 要点击的按钮
+            check_button (ButtonWrapper, callable, list[ButtonWrapper], tuple[ButtonWrapper]): 检查按钮
+            appear_button (ButtonWrapper, callable, list[ButtonWrapper], tuple[ButtonWrapper]): 出现按钮
+            additional (callable): 额外的处理函数
+            retry_wait (int, float): 重试等待时间
+            skip_first_screenshot (bool): 是否跳过第一次截图
         """
         if appear_button is None:
             appear_button = click_button
         logger.info(f'UI click: {appear_button} -> {check_button}')
 
         def process_appear(button):
+            """处理按钮出现的情况"""
             if isinstance(button, ButtonWrapper):
                 return self.appear(button)
             elif callable(button):
@@ -297,11 +309,11 @@ class UI(MainPage):
             else:
                 self.device.screenshot()
 
-            # End
+            # 结束
             if process_appear(check_button):
                 break
 
-            # Click
+            # 点击
             if click_timer.reached():
                 if process_appear(appear_button):
                     self.device.click(click_button)
@@ -312,6 +324,11 @@ class UI(MainPage):
                     continue
 
     def is_in_main(self, interval=0):
+        """
+        检查是否在主界面
+        Args:
+            interval: 检查间隔时间
+        """
         self.device.stuck_record_add(MAIN_GOTO_CHARACTER)
 
         if interval and not self.interval_is_reached(MAIN_GOTO_CHARACTER, interval=interval):
@@ -332,6 +349,11 @@ class UI(MainPage):
         return appear
 
     def is_in_login_confirm(self, interval=0):
+        """
+        检查是否在登录确认界面
+        Args:
+            interval: 检查间隔时间
+        """
         self.device.stuck_record_add(LOGIN_CONFIRM)
 
         if interval and not self.interval_is_reached(LOGIN_CONFIRM, interval=interval):
@@ -345,6 +367,11 @@ class UI(MainPage):
         return appear
 
     def is_in_map_exit(self, interval=0):
+        """
+        检查是否在地图退出界面
+        Args:
+            interval: 检查间隔时间
+        """
         self.device.stuck_record_add(MAP_EXIT)
 
         if interval and not self.interval_is_reached(MAP_EXIT, interval=interval):
@@ -365,7 +392,8 @@ class UI(MainPage):
 
     def handle_login_confirm(self):
         """
-        If LOGIN_CONFIRM appears, do as task `Restart` not just clicking it
+        处理登录确认界面
+        如果出现LOGIN_CONFIRM，执行完整的重启任务而不是仅仅点击它
         """
         if self.is_in_login_confirm(interval=0):
             logger.warning('Login page appeared')
@@ -375,14 +403,15 @@ class UI(MainPage):
         return False
 
     def ui_goto_main(self):
+        """跳转到主界面"""
         return self.ui_ensure(destination=page_main)
 
     def ui_additional(self) -> bool:
         """
-        Handle all possible popups during UI switching.
+        处理UI切换过程中可能出现的所有弹窗
 
         Returns:
-            If handled any popup.
+            bool: 是否处理了任何弹窗
         """
         if self.handle_reward():
             return True
@@ -398,7 +427,7 @@ class UI(MainPage):
             return True
         if self.appear_then_click(INFO_CLOSE, interval=5):
             return True
-        # Popup story that advice you watch it, but no, later
+        # 处理建议观看剧情的弹窗，选择稍后观看
         if self.appear_then_click(POPUP_STORY_LATER, interval=5):
             return True
 
@@ -411,6 +440,14 @@ class UI(MainPage):
             timeout=Timer(2, count=6),
             skip_first_screenshot=True
     ):
+        """
+        确认按钮状态
+        Args:
+            button: 要确认的按钮
+            confirm: 确认计时器
+            timeout: 超时计时器
+            skip_first_screenshot: 是否跳过第一次截图
+        """
         confirm.reset()
         timeout.reset()
         while 1:
@@ -431,11 +468,12 @@ class UI(MainPage):
 
     def ui_page_confirm(self, page):
         """
+        确认页面状态
         Args:
-            page (Page):
+            page (Page): 要确认的页面
 
         Returns:
-            bool: If handled
+            bool: 是否处理了确认
         """
         if page == page_main:
             self._ui_button_confirm(page.check_button)
@@ -445,25 +483,25 @@ class UI(MainPage):
 
     def ui_button_interval_reset(self, button):
         """
-        Reset interval of some button to avoid mistaken clicks
-
+        重置按钮的点击间隔，避免误触
         Args:
-            button (Button):
+            button (Button): 要重置的按钮
         """
         pass
 
     def ui_leave_special(self):
         """
-        Leave from:
-        - Rogue domains
-        - Character trials
+        离开特殊界面
+        包括：
+        - 模拟宇宙领域
+        - 角色试用
 
         Returns:
-            bool: If left a special plane
+            bool: 是否离开了特殊界面
 
         Pages:
-            in: Any
-            out: page_main
+            in: 任意界面
+            out: 主界面
         """
         if not self.is_in_map_exit():
             return False
@@ -477,7 +515,7 @@ class UI(MainPage):
             else:
                 self.device.screenshot()
 
-            # End
+            # 结束
             if clicked:
                 if self.is_in_main():
                     logger.info(f'Leave to {page_main}')

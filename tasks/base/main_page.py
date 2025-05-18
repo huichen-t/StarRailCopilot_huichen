@@ -12,71 +12,80 @@ from tasks.map.keywords import KEYWORDS_MAP_PLANE, MapPlane
 
 
 class OcrPlaneName(OcrWhiteLetterOnComplexBackground):
+    """地图名称OCR识别类，用于处理各种地图名称的识别和修正"""
+    
     def after_process(self, result):
-        # RobotSettlement1
+        """
+        对OCR识别结果进行后处理，修正各种可能的识别错误
+        Args:
+            result: OCR识别结果
+
+        Returns:
+            str: 处理后的结果
+        """
+        # 处理机器人定居点1
         result = re.sub(r'-[Ii1]$', '', result)
         result = re.sub(r'I$', '', result)
         result = re.sub(r'\d+$', '', result)
-        # Herta's OfficeY/
+        # 处理黑塔办公室Y/
         result = re.sub(r'Y/?$', '', result)
-        # Stargazer Navatia -> Stargazer Navalia
+        # 修正观星者导航名称
         result = result.replace('avatia', 'avalia')
-        # 苏乐达™热砂海选会场
+        # 处理苏乐达™热砂海选会场
         result = re.sub(r'(苏乐达|蘇樂達|SoulGlad|スラーダ|FelizAlma)[rtT]*M*', r'\1', result)
-        # SoulGladtM Scorchsand Audition Ven
+        # 处理SoulGladtM Scorchsand Audition Ven
         if 'Audition' in result:
             right = result.find('Audition') + len('Audition')
             result = result[:right] + ' Venue'
-        # The Radiant Feldspar
+        # 处理The Radiant Feldspar
         result = re.sub(r'The\s*Rad', 'Rad', result)
-        # 幽囚狱
+        # 修正幽囚狱
         result = result.replace('幽因狱', '幽囚狱')
         result = result.replace('幽因獄', '幽囚獄')
-        # DomainiRespite
+        # 修正DomainiRespite
         result = result.replace('omaini', 'omain')
-        # Domain=Combat
+        # 修正Domain=Combat
         result = result.replace('=', '')
-        # Domain--Occunrence
-        # Domain'--Occurence
-        # Domain-Qccurrence
+        # 修正各种Domain相关错误
         result = result.replace('cunr', 'cur').replace('uren', 'urren').replace('Qcc', 'Occ')
-        # Domain-Elit
-        # Domain--Etite
+        # 修正Domain-Elit相关错误
         result = re.sub(r'[Ee]lit$', 'Elite', result)
         result = result.replace('tite', 'lite')
 
-        # 区域－战
+        # 修正区域战斗相关错误
         result = re.sub(r'区域.*战$', '区域战斗', result)
-        # 区域－事
+        # 修正区域事件相关错误
         result = re.sub(r'区域.*[事件]$', '区域事件', result)
-        # 区域－战
+        # 修正区域交易相关错误
         result = re.sub(r'区域.*交$', '区域交易', result)
-        # 区域－战
+        # 修正区域精英相关错误
         result = re.sub(r'区域.*[精英]$', '区域精英', result)
-        # 区域-事伴, 区域－事祥
+        # 修正区域事件相关错误
         result = re.sub(r'事[伴祥]', '事件', result)
-        # 医域－战斗
+        # 修正医域错误
         result = result.replace('医域', '区域')
-        # 区域-战半, 区域-战头, 区域-战头书
+        # 修正区域战斗相关错误
         result = re.sub(r'战[半头卒三]', '战斗', result)
-        # 区域一战斗
+        # 统一区域分隔符
         result = re.sub(r'区域[\-—－一=]', '区域-', result)
-        # 累塔的办公室
+        # 修正黑塔办公室
         result = result.replace('累塔', '黑塔')
         if '星港' in result:
             result = '迴星港'
         result = result.replace('太司', '太卜司')
-        # IRadiantFeldspar
+        # 修正Radiant Feldspar相关错误
         result = re.sub('[Ii1|]\s*Radiant', 'Radiant', result)
 
+        # 移除空格
         result = result.replace(' ', '')
 
         return super().after_process(result)
 
 
 class MainPage(PopupHandler):
-    # Same as BigmapPlane class
-    # Current plane
+    """主页面处理类，用于处理主界面的各种操作和状态"""
+    # 与BigmapPlane类相同
+    # 当前所在的地图
     plane: MapPlane = KEYWORDS_MAP_PLANE.Herta_ParlorCar
 
     _lang_checked = False
@@ -84,6 +93,13 @@ class MainPage(PopupHandler):
 
     def update_plane(self, lang=None) -> MapPlane | None:
         """
+        更新当前所在的地图信息
+        Args:
+            lang: 语言，如果为None则使用服务器语言
+
+        Returns:
+            MapPlane | None: 当前地图，如果无法识别则返回None
+
         Pages:
             in: page_main
         """
@@ -91,13 +107,13 @@ class MainPage(PopupHandler):
             lang = server.lang
         ocr = OcrPlaneName(OCR_MAP_NAME, lang=lang)
         result = ocr.ocr_single_line(self.device.image)
-        # Try to match
+        # 尝试匹配
         keyword = ocr._match_result(result, keyword_classes=MapPlane, lang=lang)
         if keyword is not None:
             self.plane = keyword
             logger.attr('CurrentPlane', keyword)
             return keyword
-        # Try to remove suffix
+        # 尝试移除后缀后匹配
         for suffix in range(1, 5):
             keyword = ocr._match_result(result[:-suffix], keyword_classes=MapPlane, lang=lang)
             if keyword is not None:
@@ -108,13 +124,18 @@ class MainPage(PopupHandler):
         return None
 
     def check_lang_from_map_plane(self) -> str | None:
+        """
+        通过地图名称检查游戏语言
+        Returns:
+            str | None: 检测到的语言，如果无法检测则返回None
+        """
         logger.info('check_lang_from_map_plane')
         lang_unknown = self.config.Emulator_GameLanguage == 'auto'
 
         if lang_unknown:
             lang_list = VALID_LANG
         else:
-            # Try current lang first
+            # 优先尝试当前语言
             lang_list = [server.lang] + [lang for lang in VALID_LANG if lang != server.lang]
 
         for lang in lang_list:
@@ -140,11 +161,12 @@ class MainPage(PopupHandler):
 
     def handle_lang_check(self, page: Page):
         """
+        处理语言检查
         Args:
-            page:
+            page: 当前页面
 
         Returns:
-            bool: If checked
+            bool: 是否进行了语言检查
         """
         if MainPage._lang_checked:
             return False
@@ -156,8 +178,9 @@ class MainPage(PopupHandler):
 
     def acquire_lang_checked(self):
         """
+        获取语言检查状态
         Returns:
-            bool: If checked
+            bool: 是否进行了语言检查
         """
         if MainPage._lang_checked:
             return False

@@ -22,7 +22,7 @@ from module.exception import ScriptError
 
 # 标点符号正则表达式，包括中英文标点
 # ord('．') = 65294
-REGEX_PUNCTUATION = re.compile(r'[ ,.．\'"'"'，。、…:：;；!！?？·・•●〇°*※\-—–－/\\|丨\n\t()\[\]（）「」『』【】《》［］]')
+REGEX_PUNCTUATION = re.compile(r'[ ,.．\'"“”，。、…:：;；!！?？·・•●〇°*※\-—–－/\\|丨\n\t()\[\]（）「」『』【】《》［］]')
 
 
 def parse_name(n):

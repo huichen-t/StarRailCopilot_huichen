@@ -1,3 +1,22 @@
+"""
+OCR识别模块
+
+功能：
+1. 提供OCR文本识别功能
+2. 支持单行和多行文本识别
+3. 支持关键词匹配
+4. 支持数字、计数器和时间识别
+5. 支持复杂背景下的白色文字识别
+
+主要类：
+- OcrResultButton: OCR结果按钮类
+- Ocr: 基础OCR类
+- Digit: 数字识别类
+- DigitCounter: 数字计数器识别类
+- Duration: 时间识别类
+- OcrWhiteLetterOnComplexBackground: 复杂背景白色文字识别类
+"""
+
 import time
 from datetime import timedelta
 
@@ -16,11 +35,21 @@ from module.ocr.utils import merge_buttons
 
 
 class OcrResultButton:
+    """
+    OCR结果按钮类
+    
+    功能：
+    1. 存储OCR识别结果
+    2. 管理按钮区域和文本信息
+    3. 支持关键词匹配
+    """
     def __init__(self, boxed_result: BoxedResult, matched_keyword):
         """
+        初始化OCR结果按钮
+        
         Args:
-            boxed_result: BoxedResult from ppocr-onnx
-            matched_keyword: Keyword object or None
+            boxed_result: ppocr-onnx的识别结果
+            matched_keyword: 匹配的关键词对象或None
         """
         self.area = boxed_result.box
         self.search = area_pad(self.area, pad=-20)
@@ -53,20 +82,37 @@ class OcrResultButton:
 
     @property
     def is_keyword_matched(self) -> bool:
+        """
+        检查是否匹配到关键词
+        
+        Returns:
+            bool: 是否匹配到关键词
+        """
         return self.matched_keyword is not None
 
 
 class Ocr:
-    # Merge results with box distance <= thres
+    """
+    基础OCR类
+    
+    功能：
+    1. 提供OCR识别的基础功能
+    2. 支持单行和多行文本识别
+    3. 支持关键词匹配
+    4. 支持结果预处理和后处理
+    """
+    # 合并结果的阈值
     merge_thres_x = 0
     merge_thres_y = 0
 
     def __init__(self, button: ButtonWrapper, lang=None, name=None):
         """
+        初始化OCR类
+        
         Args:
-            button:
-            lang: If None, use in-game language
-            name: If None, use button.name
+            button: 按钮包装器
+            lang: 语言，None表示使用游戏语言
+            name: 名称，None表示使用按钮名称
         """
         if lang is None:
             lang = server.lang
@@ -79,25 +125,35 @@ class Ocr:
 
     @cached_property
     def model(self) -> TextSystem:
+        """
+        获取OCR模型
+        
+        Returns:
+            TextSystem: OCR模型实例
+        """
         return OCR_MODEL.get_by_lang(self.lang)
 
     def pre_process(self, image):
         """
+        图像预处理
+        
         Args:
-            image (np.ndarray): Shape (height, width, channel)
-
+            image: 输入图像，形状为(height, width, channel)
+            
         Returns:
-            np.ndarray: Shape (width, height)
+            np.ndarray: 处理后的图像，形状为(width, height)
         """
         return image
 
     def after_process(self, result):
         """
+        结果后处理
+        
         Args:
-            result (str): '第二行'
-
+            result: 识别结果字符串
+            
         Returns:
-            str:
+            str: 处理后的结果
         """
         if result.startswith('UID'):
             result = 'UID'
@@ -105,25 +161,52 @@ class Ocr:
 
     def format_result(self, result):
         """
-        Will be overriden.
+        格式化结果
+        
+        Args:
+            result: 识别结果
+            
+        Returns:
+            格式化后的结果
         """
         return result
 
     def _log_change(self, attr, func, before):
+        """
+        记录结果变化
+        
+        Args:
+            attr: 属性名
+            func: 处理函数
+            before: 处理前的值
+            
+        Returns:
+            处理后的值
+        """
         after = func(before)
         if after != before:
             logger.attr(f'{self.name} {attr}', f'{before} -> {after}')
         return after
 
     def ocr_single_line(self, image, direct_ocr=False):
-        # pre process
+        """
+        单行文本识别
+        
+        Args:
+            image: 输入图像
+            direct_ocr: 是否直接进行OCR而不裁剪
+            
+        Returns:
+            str: 识别结果
+        """
+        # 预处理
         start_time = time.time()
         if not direct_ocr:
             image = crop(image, self.button.area, copy=False)
         image = self.pre_process(image)
-        # ocr
+        # OCR识别
         result, _ = self.model.ocr_single_line(image)
-        # after proces
+        # 后处理
         result = self._log_change('after', self.after_process, result)
         result = self._log_change('format', self.format_result, result)
         logger.attr(name='%s %ss' % (self.name, float2str(time.time() - start_time)),
@@ -131,13 +214,22 @@ class Ocr:
         return result
 
     def ocr_multi_lines(self, image_list):
-        # pre process
+        """
+        多行文本识别
+        
+        Args:
+            image_list: 图像列表
+            
+        Returns:
+            list: 识别结果列表，每个元素为(结果, 分数)元组
+        """
+        # 预处理
         start_time = time.time()
         image_list = [self.pre_process(image) for image in image_list]
-        # ocr
+        # OCR识别
         result_list = self.model.ocr_lines(image_list)
         result_list = [(result, score) for result, score in result_list]
-        # after process
+        # 后处理
         result_list = [(self.after_process(result), score) for result, score in result_list]
         result_list = [(self.format_result(result), score) for result, score in result_list]
         logger.attr(name="%s %ss" % (self.name, float2str(time.time() - start_time)),
@@ -146,27 +238,35 @@ class Ocr:
 
     def filter_detected(self, result: BoxedResult) -> bool:
         """
-        Return False to drop result.
+        过滤检测结果
+        
+        Args:
+            result: 检测结果
+            
+        Returns:
+            bool: 是否保留结果
         """
         return True
 
     def detect_and_ocr(self, image, direct_ocr=False) -> list[BoxedResult]:
         """
+        检测和识别文本
+        
         Args:
-            image:
-            direct_ocr: True to ignore `button` attribute and feed the image to OCR model without cropping.
-
+            image: 输入图像
+            direct_ocr: 是否直接进行OCR而不裁剪
+            
         Returns:
-
+            list[BoxedResult]: 检测和识别结果列表
         """
-        # pre process
+        # 预处理
         start_time = time.time()
         if not direct_ocr:
             image = crop(image, self.button.area, copy=False)
         image = self.pre_process(image)
-        # ocr
+        # OCR识别
         results: list[BoxedResult] = self.model.detect_and_ocr(image)
-        # after proces
+        # 后处理
         for result in results:
             if not direct_ocr:
                 result.box += self.button.area[:2]
@@ -189,23 +289,27 @@ class Ocr:
             ignore_punctuation=True,
             ignore_digit=True):
         """
+        匹配关键词
+        
         Args:
-            result (str):
-            keyword_classes: A list of `Keyword` class or classes inherited `Keyword`
-
+            result: 识别结果
+            keyword_classes: 关键词类或类列表
+            lang: 语言
+            ignore_punctuation: 是否忽略标点符号
+            ignore_digit: 是否忽略数字
+            
         Returns:
-            If matched, return `Keyword` object or objects inherited `Keyword`
-            If not match, return None
+            Keyword: 匹配的关键词对象，未匹配返回None
         """
         if not isinstance(keyword_classes, list):
             keyword_classes = [keyword_classes]
 
-        # Digits will be considered as the index of keyword
+        # 数字将被视为关键词索引
         if ignore_digit:
             if result.isdigit():
                 return None
 
-        # Try in current lang
+        # 在当前语言中尝试匹配
         for keyword_class in keyword_classes:
             try:
                 matched = keyword_class.find(
@@ -227,14 +331,16 @@ class Ocr:
             ignore_punctuation=True
     ) -> Keyword:
         """
+        单行文本关键词匹配
+        
         Args:
-            image: Image to detect
-            keyword_classes: `Keyword` class or classes inherited `Keyword`, or a list of them.
-            lang:
-            ignore_punctuation:
-
+            image: 输入图像
+            keyword_classes: 关键词类或类列表
+            lang: 语言
+            ignore_punctuation: 是否忽略标点符号
+            
         Returns:
-            Keyword: Or None if it didn't matched known keywords.
+            Keyword: 匹配的关键词对象，未匹配返回None
         """
         result = self.ocr_single_line(image)
 
@@ -257,15 +363,16 @@ class Ocr:
             ignore_punctuation=True
     ) -> list[Keyword]:
         """
+        多行文本关键词匹配
+        
         Args:
-            image_list:
-            keyword_classes: `Keyword` class or classes inherited `Keyword`, or a list of them.
-            lang:
-            ignore_punctuation:
-
+            image_list: 图像列表
+            keyword_classes: 关键词类或类列表
+            lang: 语言
+            ignore_punctuation: 是否忽略标点符号
+            
         Returns:
-            List of matched Keyword.
-            OCR result which didn't matched known keywords will be dropped.
+            list[Keyword]: 匹配的关键词对象列表
         """
         results = self.ocr_multi_lines(image_list)
 
@@ -289,6 +396,19 @@ class Ocr:
             ignore_punctuation=True,
             ignore_digit=True
     ) -> OcrResultButton:
+        """
+        生成OCR结果按钮
+        
+        Args:
+            boxed_result: 检测结果
+            keyword_classes: 关键词类或类列表
+            lang: 语言
+            ignore_punctuation: 是否忽略标点符号
+            ignore_digit: 是否忽略数字
+            
+        Returns:
+            OcrResultButton: OCR结果按钮对象
+        """
         if not isinstance(keyword_classes, list):
             keyword_classes = [keyword_classes]
 
@@ -304,14 +424,15 @@ class Ocr:
 
     def matched_ocr(self, image, keyword_classes, direct_ocr=False) -> list[OcrResultButton]:
         """
+        匹配OCR结果
+        
         Args:
-            image: Screenshot
-            keyword_classes: `Keyword` class or classes inherited `Keyword`, or a list of them.
-            direct_ocr: True to ignore `button` attribute and feed the image to OCR model without cropping.
-
+            image: 输入图像
+            keyword_classes: 关键词类或类列表
+            direct_ocr: 是否直接进行OCR而不裁剪
+            
         Returns:
-            List of matched OcrResultButton.
-            OCR result which didn't matched known keywords will be dropped.
+            list[OcrResultButton]: 匹配的OCR结果按钮列表
         """
         results = self.detect_and_ocr(image, direct_ocr=direct_ocr)
 
@@ -324,13 +445,25 @@ class Ocr:
 
 
 class Digit(Ocr):
+    """
+    数字识别类
+    
+    功能：
+    1. 识别图像中的数字
+    2. 提取数字并转换为整数
+    """
     def __init__(self, button: ButtonWrapper, lang=None, name=None):
         super().__init__(button, lang=lang, name=name)
 
     def format_result(self, result) -> int:
         """
+        格式化结果为整数
+        
+        Args:
+            result: 识别结果
+            
         Returns:
-            int:
+            int: 提取的数字
         """
         result = super().after_process(result)
         logger.attr(name=self.name, text=str(result))
@@ -344,19 +477,38 @@ class Digit(Ocr):
 
 
 class DigitCounter(Ocr):
+    """
+    数字计数器识别类
+    
+    功能：
+    1. 识别计数器格式（如"14/15"）
+    2. 提取当前值、剩余值和总值
+    """
     def __init__(self, button: ButtonWrapper, lang=None, name=None):
         super().__init__(button, lang=lang, name=name)
 
     @classmethod
     def is_format_matched(cls, result) -> bool:
+        """
+        检查是否匹配计数器格式
+        
+        Args:
+            result: 识别结果
+            
+        Returns:
+            bool: 是否匹配计数器格式
+        """
         return '/' in result
 
     def format_result(self, result) -> tuple[int, int, int]:
         """
-        Do OCR on a counter, such as `14/15`, and returns 14, 1, 15
-
+        格式化计数器结果
+        
+        Args:
+            result: 识别结果
+            
         Returns:
-            int, int, int: current, remain, total
+            tuple: (当前值, 剩余值, 总值)
         """
         result = super().after_process(result)
         logger.attr(name=self.name, text=str(result))
@@ -365,7 +517,6 @@ class DigitCounter(Ocr):
         if res:
             groups = [int(s) for s in res.groups()]
             current, total = int(groups[0]), int(groups[1])
-            # current = min(current, total)
             return current, total - current, total
         else:
             logger.warning(f'No digit counter found in {result}')
@@ -373,8 +524,24 @@ class DigitCounter(Ocr):
 
 
 class Duration(Ocr):
+    """
+    时间识别类
+    
+    功能：
+    1. 识别时间格式（如"18d 2h 13m 30s"）
+    2. 转换为timedelta对象
+    """
     @classmethod
     def timedelta_regex(cls, lang):
+        """
+        获取时间正则表达式
+        
+        Args:
+            lang: 语言
+            
+        Returns:
+            re.Pattern: 时间正则表达式
+        """
         regex_str = {
             'cn': r'^(?P<prefix>.*?)'
                   r'((?P<days>\d{1,2})\s*天\s*)?'
@@ -392,6 +559,15 @@ class Duration(Ocr):
         return re.compile(regex_str)
 
     def after_process(self, result):
+        """
+        结果后处理
+        
+        Args:
+            result: 识别结果
+            
+        Returns:
+            str: 处理后的结果
+        """
         result = super().after_process(result)
         result = result.strip('.,。，')
         result = result.replace('Oh', '0h').replace('oh', '0h')
@@ -399,10 +575,13 @@ class Duration(Ocr):
 
     def format_result(self, result: str) -> timedelta:
         """
-        Do OCR on a duration, such as `18d 2h 13m 30s`, `2h`, `13m 30s`, `9s`
-
+        格式化时间结果
+        
+        Args:
+            result: 识别结果
+            
         Returns:
-            timedelta:
+            timedelta: 时间间隔对象
         """
         matched = self.timedelta_regex(self.lang).search(result)
         if not matched:
@@ -415,21 +594,47 @@ class Duration(Ocr):
 
     @staticmethod
     def _sanitize_number(number) -> int:
+        """
+        清理数字
+        
+        Args:
+            number: 输入数字
+            
+        Returns:
+            int: 清理后的数字
+        """
         if number is None:
             return 0
         return int(number)
 
 
 class OcrWhiteLetterOnComplexBackground(Ocr):
+    """
+    复杂背景白色文字识别类
+    
+    功能：
+    1. 识别复杂背景下的白色文字
+    2. 支持文字框放大
+    3. 优化检测阈值
+    """
     white_preprocess = True
-    # 0.6 by default, 0.2 for lower
+    # 默认阈值0.6，降低到0.2
     box_thresh = 0.2
-    # (x, y) Enlarge detected boxes to `min_boxes`
-    # So standalone digits can be better detected
-    # Note that min_box should be 4px larger than the actual letter
+    # 放大检测框到最小尺寸
+    # 使独立数字能被更好地检测
+    # 注意：最小框应比实际字母大4像素
     min_box = None
 
     def pre_process(self, image):
+        """
+        图像预处理
+        
+        Args:
+            image: 输入图像
+            
+        Returns:
+            np.ndarray: 处理后的图像
+        """
         if self.white_preprocess:
             image = extract_white_letters(image, threshold=255)
             image = cv2.merge([image, image, image])
@@ -437,6 +642,16 @@ class OcrWhiteLetterOnComplexBackground(Ocr):
 
     @staticmethod
     def enlarge_box(box, min_box):
+        """
+        放大检测框
+        
+        Args:
+            box: 检测框
+            min_box: 最小尺寸
+            
+        Returns:
+            np.ndarray: 放大后的检测框
+        """
         area = corner2area(box)
         center = (int(x) for x in area_center(area))
         size_x, size_y = area_size(area)
@@ -452,6 +667,15 @@ class OcrWhiteLetterOnComplexBackground(Ocr):
             return box
 
     def enlarge_boxes(self, boxes):
+        """
+        放大所有检测框
+        
+        Args:
+            boxes: 检测框列表
+            
+        Returns:
+            np.ndarray: 放大后的检测框列表
+        """
         if self.min_box is None:
             return boxes
 
@@ -460,10 +684,20 @@ class OcrWhiteLetterOnComplexBackground(Ocr):
         return boxes
 
     def detect_and_ocr(self, *args, **kwargs):
-        # Try hard to lower TextSystem.box_thresh
+        """
+        检测和识别文本
+        
+        Args:
+            *args: 位置参数
+            **kwargs: 关键字参数
+            
+        Returns:
+            list[BoxedResult]: 检测和识别结果列表
+        """
+        # 尝试降低TextSystem.box_thresh
         backup = self.model.text_detector.box_thresh
         self.model.text_detector.box_thresh = 0.2
-        # Patch TextDetector
+        # 修补TextDetector
         text_detector = self.model.text_detector
 
         def text_detector_with_min_box(*args, **kwargs):

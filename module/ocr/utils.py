@@ -1,3 +1,23 @@
+"""
+OCR工具模块
+
+功能：
+1. 提供OCR结果处理工具
+2. 支持区域距离计算
+3. 支持区域合并
+4. 支持按钮配对
+5. 支持结果过滤和优化
+
+主要函数：
+- area_distance: 计算两个区域中心点距离
+- area_cross_area: 检查两个区域是否相交
+- merge_result_button: 合并按钮结果
+- merge_buttons: 合并多个按钮
+- pair_buttons: 配对按钮
+- split_and_pair_buttons: 分割并配对按钮
+- split_and_pair_button_attr: 分割并配对按钮属性
+"""
+
 import itertools
 
 from pponnxcr.predict_system import BoxedResult
@@ -7,14 +27,14 @@ from module.base.utils import area_center, area_in_area, area_offset
 
 def area_distance(area1, area2):
     """
-    Get the distance of 2 area center
-
+    计算两个区域中心点之间的距离
+    
     Args:
-        area1: (upper_left_x, upper_left_y, bottom_right_x, bottom_right_y)
-        area2: (upper_left_x, upper_left_y, bottom_right_x, bottom_right_y)
-
+        area1: 第一个区域，格式为(左上角x, 左上角y, 右下角x, 右下角y)
+        area2: 第二个区域，格式为(左上角x, 左上角y, 右下角x, 右下角y)
+        
     Returns:
-        float:
+        float: 两个区域中心点之间的欧氏距离
     """
     x1, y1 = area_center(area1)
     x2, y2 = area_center(area2)
@@ -23,16 +43,18 @@ def area_distance(area1, area2):
 
 def area_cross_area(area1, area2, thres_x=20, thres_y=20):
     """
+    检查两个区域是否相交
+    
     Args:
-        area1: (upper_left_x, upper_left_y, bottom_right_x, bottom_right_y).
-        area2: (upper_left_x, upper_left_y, bottom_right_x, bottom_right_y).
-        thres_x:
-        thres_y:
-
+        area1: 第一个区域，格式为(左上角x, 左上角y, 右下角x, 右下角y)
+        area2: 第二个区域，格式为(左上角x, 左上角y, 右下角x, 右下角y)
+        thres_x: x方向相交阈值
+        thres_y: y方向相交阈值
+        
     Returns:
-        bool:
+        bool: 两个区域是否相交
     """
-    # https://www.yiiven.cn/rect-is-intersection.html
+    # 参考：https://www.yiiven.cn/rect-is-intersection.html
     xa1, ya1, xa2, ya2 = area1
     xb1, yb1, xb2, yb2 = area2
     return abs(xb2 + xb1 - xa2 - xa1) <= xa2 - xa1 + xb2 - xb1 + thres_x * 2 \
@@ -40,12 +62,32 @@ def area_cross_area(area1, area2, thres_x=20, thres_y=20):
 
 
 def _merge_area(area1, area2):
+    """
+    合并两个区域
+    
+    Args:
+        area1: 第一个区域
+        area2: 第二个区域
+        
+    Returns:
+        tuple: 合并后的区域，格式为(左上角x, 左上角y, 右下角x, 右下角y)
+    """
     xa1, ya1, xa2, ya2 = area1
     xb1, yb1, xb2, yb2 = area2
     return min(xa1, xb1), min(ya1, yb1), max(xa2, xb2), max(ya2, yb2)
 
 
 def _merge_boxed_result(left: BoxedResult, right: BoxedResult) -> BoxedResult:
+    """
+    合并两个BoxedResult对象
+    
+    Args:
+        left: 左侧BoxedResult对象
+        right: 右侧BoxedResult对象
+        
+    Returns:
+        BoxedResult: 合并后的BoxedResult对象
+    """
     left.box = _merge_area(left.box, right.box)
     left.ocr_text = left.ocr_text + right.ocr_text
     return left
@@ -58,11 +100,16 @@ def merge_result_button(
         merged_text: str
 ) -> list[BoxedResult]:
     """
+    合并包含特定关键词的按钮结果
+    
     Args:
-        results:
-        left_keyword:
-        right_keyword:
-        merged_text:
+        results: BoxedResult对象列表
+        left_keyword: 左侧关键词
+        right_keyword: 右侧关键词
+        merged_text: 合并后的文本
+        
+    Returns:
+        list[BoxedResult]: 合并后的结果列表
     """
     left = None
     right = None
@@ -89,13 +136,15 @@ def merge_result_button(
 
 def merge_buttons(buttons: list[BoxedResult], thres_x=20, thres_y=20) -> list[BoxedResult]:
     """
+    合并多个按钮
+    
     Args:
-        buttons:
-        thres_x: Merge results with horizontal box distance <= `thres_x`
-        thres_y: Merge results with vertical box distance <= `thres_y`
-
+        buttons: BoxedResult对象列表
+        thres_x: 水平方向合并阈值，当按钮水平距离小于等于此值时合并
+        thres_y: 垂直方向合并阈值，当按钮垂直距离小于等于此值时合并
+        
     Returns:
-
+        list[BoxedResult]: 合并后的按钮列表
     """
     if thres_x <= 0 and thres_y <= 0:
         return buttons
@@ -123,15 +172,15 @@ def merge_buttons(buttons: list[BoxedResult], thres_x=20, thres_y=20) -> list[Bo
 
 def pair_buttons(group1, group2, relative_area):
     """
-    Pair buttons in group1 with those in group2 in the relative_area.
-
+    在相对区域内配对按钮
+    
     Args:
-        group1 (list[OcrResultButton], Iterable[OcrResultButton]):
-        group2 (list[OcrResultButton], Iterable[OcrResultButton]):
-        relative_area (tuple[int, int, int, int]):
-
+        group1: 第一组按钮列表或可迭代对象
+        group2: 第二组按钮列表或可迭代对象
+        relative_area: 相对区域，格式为(左上角x, 左上角y, 右下角x, 右下角y)
+        
     Yields:
-        OcrResultButton, OcrResultButton:
+        tuple: (button1, button2) 配对的按钮对
     """
     for button1 in group1:
         area = area_offset(relative_area, offset=button1.area[:2])
@@ -143,17 +192,16 @@ def pair_buttons(group1, group2, relative_area):
 
 def split_and_pair_buttons(buttons, split_func, relative_area):
     """
-    Pair buttons in group1 with those in group2 in the relative_area.
-
+    分割并配对按钮
+    
     Args:
-        buttons (list[OcrResultButton]):
-        split_func (callable):
-            A function that accepts an OcrResultButton object returns a bool,
-            button that has a True return join group1, False join group2.
-        relative_area (tuple[int, int, int, int]):
-
+        buttons: 按钮列表
+        split_func: 分割函数，接受OcrResultButton对象并返回bool值
+                   True返回的按钮加入group1，False返回的按钮加入group2
+        relative_area: 相对区域，格式为(左上角x, 左上角y, 右下角x, 右下角y)
+        
     Yields:
-        OcrResultButton, OcrResultButton:
+        tuple: (button1, button2) 配对的按钮对
     """
     group1 = [button for button in buttons if split_func(button)]
     group2 = [button for button in buttons if not split_func(button)]
@@ -163,18 +211,16 @@ def split_and_pair_buttons(buttons, split_func, relative_area):
 
 def split_and_pair_button_attr(buttons, split_func, relative_area):
     """
-    Pair buttons in group1 with those in group2 in the relative_area,
-    and treat group2 as the BUTTON attribute of group1.
-
+    分割并配对按钮属性
+    
     Args:
-        buttons (list[OcrResultButton]):
-        split_func (callable):
-            A function that accepts an OcrResultButton object returns a bool,
-            button that has a True return join group1, False join group2.
-        relative_area (tuple[int, int, int, int]):
-
+        buttons: 按钮列表
+        split_func: 分割函数，接受OcrResultButton对象并返回bool值
+                   True返回的按钮加入group1，False返回的按钮加入group2
+        relative_area: 相对区域，格式为(左上角x, 左上角y, 右下角x, 右下角y)
+        
     Yields:
-        OcrResultButton:
+        OcrResultButton: 处理后的按钮对象，group2的按钮作为group1按钮的BUTTON属性
     """
     for button1, button2 in split_and_pair_buttons(buttons, split_func, relative_area):
         button1.button = button2.button

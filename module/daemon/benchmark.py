@@ -1,3 +1,16 @@
+"""
+性能测试模块
+
+功能：
+1. 测试截图和点击操作的性能
+2. 支持多种截图和点击方法
+3. 提供性能评估和推荐
+4. 生成性能测试报告
+
+主要类：
+- Benchmark: 性能测试主类
+"""
+
 import time
 import typing as t
 
@@ -13,6 +26,16 @@ from module.logger import logger
 
 
 def float2str(n, decimal=3):
+    """
+    将浮点数转换为字符串，添加时间单位
+    
+    Args:
+        n: 输入数值
+        decimal: 小数位数
+        
+    Returns:
+        str: 格式化后的字符串，带时间单位
+    """
     if not isinstance(n, (float, int)):
         return str(n)
     else:
@@ -20,23 +43,37 @@ def float2str(n, decimal=3):
 
 
 class Benchmark(DaemonBase):
+    """
+    性能测试类
+    
+    功能：
+    1. 测试截图和点击操作的性能
+    2. 评估不同方法的性能表现
+    3. 推荐最优的操作方法
+    4. 生成性能测试报告
+    """
+    # 测试总次数
     TEST_TOTAL = 15
+    # 取最优结果的数量
     TEST_BEST = int(TEST_TOTAL * 0.8)
 
     def benchmark_test(self, func, *args, **kwargs):
         """
+        执行性能测试
+        
         Args:
-            func: Function to test.
-            *args: Passes to func.
-            **kwargs: Passes to func.
-
+            func: 要测试的函数
+            *args: 传递给func的参数
+            **kwargs: 传递给func的关键字参数
+            
         Returns:
-            float: Time cost on average.
+            float: 平均耗时
         """
         logger.hr(f'Benchmark test', level=2)
         logger.info(f'Testing function: {func.__name__}')
         record = []
 
+        # 执行多次测试
         for n in range(1, self.TEST_TOTAL + 1):
             start = time.time()
 
@@ -59,12 +96,22 @@ class Benchmark(DaemonBase):
             record.append(cost)
 
         logger.info('Benchmark tests done')
+        # 计算最优结果的平均值
         average = float(np.mean(np.sort(record)[:self.TEST_BEST]))
         logger.info(f'Time cost {float2str(average)} ({self.TEST_BEST} best results out of {self.TEST_TOTAL} tests)')
         return average
 
     @staticmethod
     def evaluate_screenshot(cost):
+        """
+        评估截图性能
+        
+        Args:
+            cost: 耗时
+            
+        Returns:
+            Text: 带颜色的性能评估结果
+        """
         if not isinstance(cost, (float, int)):
             return Text(cost, style="bold bright_red")
 
@@ -86,6 +133,15 @@ class Benchmark(DaemonBase):
 
     @staticmethod
     def evaluate_click(cost):
+        """
+        评估点击性能
+        
+        Args:
+            cost: 耗时
+            
+        Returns:
+            Text: 带颜色的性能评估结果
+        """
         if not isinstance(cost, (float, int)):
             return Text(cost, style="bold bright_red")
 
@@ -100,21 +156,13 @@ class Benchmark(DaemonBase):
     @staticmethod
     def show(test, data, evaluate_func):
         """
-        +--------------+--------+--------+
-        |  Screenshot  |  time  | Speed  |
-        +--------------+--------+--------+
-        |     ADB      | 0.319s |  Fast  |
-        | uiautomator2 | 0.476s | Medium |
-        |  aScreenCap  | Failed | Failed |
-        +--------------+--------+--------+
+        显示测试结果表格
+        
+        Args:
+            test: 测试类型（Screenshot或Control）
+            data: 测试数据
+            evaluate_func: 评估函数
         """
-        # table = PrettyTable()
-        # table.field_names = [test, 'Time', 'Speed']
-        # for row in data:
-        #     table.add_row([row[0], f'{float2str(row[1])}', evaluate_func(row[1])])
-
-        # for row in table.get_string().split('\n'):
-        #     logger.info(row)
         table = Table(show_lines=True)
         table.add_column(
             test, header_style="bright_cyan", style="cyan", no_wrap=True
@@ -130,16 +178,28 @@ class Benchmark(DaemonBase):
         logger.print(table, justify='center')
 
     def benchmark(self, screenshot: t.Tuple[str] = (), click: t.Tuple[str] = ()):
+        """
+        执行性能测试
+        
+        Args:
+            screenshot: 要测试的截图方法列表
+            click: 要测试的点击方法列表
+            
+        Returns:
+            tuple: (最快的截图方法, 最快的点击方法)
+        """
         logger.hr('Benchmark', level=1)
         logger.info(f'Testing screenshot methods: {screenshot}')
         logger.info(f'Testing click methods: {click}')
 
+        # 测试截图方法
         screenshot_result = []
         for method in screenshot:
             result = self.benchmark_test(self.device.screenshot_methods[method])
             screenshot_result.append([method, result])
 
-        area = (124, 4, 649, 106)  # Somewhere safe to click.
+        # 测试点击方法
+        area = (124, 4, 649, 106)  # 安全的点击区域
         click_result = []
         for method in click:
             x, y = random_rectangle_point(area)
@@ -147,12 +207,22 @@ class Benchmark(DaemonBase):
             click_result.append([method, result])
 
         def compare(res):
+            """
+            比较性能结果
+            
+            Args:
+                res: 测试结果
+                
+            Returns:
+                float: 用于比较的数值
+            """
             res = res[1]
             if not isinstance(res, (int, float)):
                 return 100
             else:
                 return res
 
+        # 显示测试结果
         logger.hr('Benchmark Results', level=1)
         fastest_screenshot = 'ADB_nc'
         fastest_click = 'minitouch'
@@ -164,7 +234,7 @@ class Benchmark(DaemonBase):
         if click_result:
             self.show(test='Control', data=click_result, evaluate_func=self.evaluate_click)
             fastest = sorted(click_result, key=lambda item: compare(item))[0]
-            # Prefer MaaTouch if both minitouch and MaaTouch are fastest
+            # 如果minitouch和MaaTouch都是最快的，优先选择MaaTouch
             if 'MaaTouch' in click and fastest[0] == 'minitouch':
                 fastest[0] = 'MaaTouch'
             logger.info(f'Recommend control method: {fastest[0]} ({float2str(fastest[1])})')
@@ -173,23 +243,35 @@ class Benchmark(DaemonBase):
         return fastest_screenshot, fastest_click
 
     def get_test_methods(self) -> t.Tuple[t.Tuple[str], t.Tuple[str]]:
-        # device = self.config.Benchmark_DeviceType
+        """
+        获取要测试的方法列表
+        
+        Returns:
+            tuple: (截图方法列表, 点击方法列表)
+        """
         device = 'emulator'
         screenshot = ['ADB', 'ADB_nc', 'uiautomator2', 'aScreenCap', 'aScreenCap_nc', 'DroidCast', 'DroidCast_raw']
         click = ['ADB', 'uiautomator2', 'minitouch', 'MaaTouch']
 
         def remove(*args):
+            """
+            从列表中移除指定项
+            
+            Args:
+                *args: 要移除的项
+                
+            Returns:
+                list: 移除后的列表
+            """
             return [l for l in screenshot if l not in args]
 
-        # No ascreencap on Android > 9
+        # 根据设备类型和SDK版本调整测试方法
         sdk = self.device.sdk_ver
         logger.info(f'sdk_ver: {sdk}')
         if not (21 <= sdk <= 28):
             screenshot = remove('aScreenCap', 'aScreenCap_nc')
-        # No nc loopback
         if device in ['plone_cloud_with_adb']:
             screenshot = remove('ADB_nc', 'aScreenCap_nc')
-        # VMOS
         if device == 'android_phone_vmos':
             screenshot = ['ADB', 'aScreenCap', 'DroidCast', 'DroidCast_raw']
             click = ['ADB', 'Hermit', 'MaaTouch']
@@ -207,6 +289,9 @@ class Benchmark(DaemonBase):
         return tuple(screenshot), tuple(click)
 
     def run(self):
+        """
+        运行性能测试
+        """
         try:
             self.config.override(Emulator_ScreenshotMethod='ADB')
             self.device.uninstall_minicap()
@@ -214,15 +299,15 @@ class Benchmark(DaemonBase):
             logger.critical('Request human takeover')
             return
 
-        # logger.attr('DeviceType', self.config.Benchmark_DeviceType)
-        # logger.attr('TestScene', self.config.Benchmark_TestScene)
         screenshot, click = self.get_test_methods()
         self.benchmark(screenshot, click)
 
     def run_simple_screenshot_benchmark(self):
         """
+        运行简单的截图性能测试
+        
         Returns:
-            str: The fastest screenshot method on current device.
+            str: 当前设备最快的截图方法
         """
         screenshot = ['ADB', 'ADB_nc', 'uiautomator2', 'aScreenCap', 'aScreenCap_nc', 'DroidCast', 'DroidCast_raw']
 
@@ -249,6 +334,15 @@ class Benchmark(DaemonBase):
 
 
 def run_benchmark(config):
+    """
+    运行性能测试的入口函数
+    
+    Args:
+        config: 配置对象
+        
+    Returns:
+        bool: 测试是否成功
+    """
     try:
         Benchmark(config, task='Benchmark').run()
         return True

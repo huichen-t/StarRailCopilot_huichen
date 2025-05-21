@@ -1,3 +1,16 @@
+"""
+关键词提取工具
+
+功能：
+1. 从游戏数据中提取各种关键词
+2. 生成关键词配置文件
+3. 支持多语言关键词提取
+4. 处理游戏中的各种文本内容
+
+使用方法：
+    python -m dev_tools.keyword_extract
+"""
+
 import itertools
 import os
 import re
@@ -13,36 +26,68 @@ from module.logger import logger
 
 
 def blessing_name(name: str) -> str:
+    """
+    处理祝福名称，转换为变量名格式
+    
+    Args:
+        name: 原始祝福名称
+        
+    Returns:
+        str: 处理后的变量名
+    """
     name = text_to_variable(name)
     name = re.sub(r'^\d', lambda match: f"_{match.group(0)}", name)
     return name
 
 
 class KeywordExtract:
+    """
+    关键词提取器
+    
+    功能：
+    1. 从游戏数据中提取各种关键词
+    2. 支持多语言关键词提取
+    3. 生成关键词配置文件
+    4. 处理游戏中的各种文本内容
+    """
+    
     def __init__(self):
+        """
+        初始化关键词提取器
+        为每种支持的语言创建TextMap实例
+        """
         self.text_map: dict[str, TextMap] = {lang: TextMap(lang) for lang in UI_LANGUAGES}
         # self.text_map['cn'] = TextMap('chs')
         self.keywords_id: list[int] = []
 
     def find_keyword(self, keyword, lang) -> tuple[int, str]:
         """
+        在指定语言中查找关键词
+        
         Args:
-            keyword: text string or text id
-            lang: Language to find
+            keyword: 文本字符串或文本ID
+            lang: 要查找的语言
 
         Returns:
-            text id (hash in TextMap)
-            text
+            tuple: (文本ID, 文本内容)
         """
         text_map = self.text_map[lang]
         return text_map.find(keyword)
 
     def load_keywords(self, keywords: list[str | int], lang='cn'):
+        """
+        加载关键词列表
+        
+        Args:
+            keywords: 关键词列表
+            lang: 语言代码
+        """
         text_map = self.text_map[lang]
         keywords_id = [text_map.find(keyword) for keyword in keywords]
         self.keywords_id = [keyword[0] for keyword in keywords_id if keyword[0] != 0 and keyword[1].strip()]
 
     def clear_keywords(self):
+        """清空已加载的关键词"""
         self.keywords_id = []
 
     def write_keywords(
@@ -54,12 +99,14 @@ class KeywordExtract:
             extra_attrs: dict[str, dict] = None
     ):
         """
+        将关键词写入文件
+        
         Args:
-            keyword_class:
-            output_file:
-            text_convert:
-            generator: Reuse an existing code generator
-            extra_attrs: Extra attributes write in keywords
+            keyword_class: 关键词类名
+            output_file: 输出文件路径
+            text_convert: 文本转换函数
+            generator: 代码生成器实例
+            extra_attrs: 额外的属性
         """
         if generator is None:
             gen = CodeGenerator()
@@ -98,12 +145,11 @@ class KeywordExtract:
 
     def load_quests(self, quests, lang='cn'):
         """
-        Load a set of quest keywords
-
+        加载任务关键词
+        
         Args:
-            quests: iterable quest id collection
-            lang:
-
+            quests: 任务ID集合
+            lang: 语言代码
         """
         quest_data = read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'QuestData.json'))
         quest_data = {
@@ -115,6 +161,10 @@ class KeywordExtract:
         self.load_keywords(quest_keywords, lang)
 
     def write_daily_quest_keywords(self):
+        """
+        生成日常任务关键词
+        处理任务名称和完成次数
+        """
         text_convert = text_to_variable
         keyword_class = 'DailyQuest'
         gen = CodeGenerator()
@@ -123,6 +173,7 @@ class KeywordExtract:
         """)
         gen.CommentAutoGenerage('dev_tools.keyword_extract')
 
+        # 旧版本任务名称映射
         old_quest = [
             "Go_on_assignment_1_time",  # -> Dispatch_1_assignments
             "Complete_Simulated_Universe_1_times",  # same
@@ -143,24 +194,25 @@ class KeywordExtract:
             "Level_up_any_Relic_1_time",  # -> Level_up_any_Relic_1_times
         ]
 
+        # 任务完成次数修正
         correct_times = {
-            #    "Dispatch_1_assignments":  1,
-            #    "Complete_Divergent_Universe_or_Simulated_Universe_1_times": 1,
-            #    "Clear_Calyx_Crimson_1_times": 1,
             "Enter_combat_by_attacking_enemie_Weakness_and_win_1_times": 3,
             "Use_Technique_1_times": 2,
             "Destroy_1_destructible_objects": 3,
-            #    "Obtain_victory_in_combat_with_Support_Characters_1_times": 1,
-            #    "Level_up_any_character_1_times": 1,
-            #    "Level_up_any_Light_Cone_1_times": 1,
-            #    "Use_the_Omni_Synthesizer_1_times": 1,
-            #    "Take_photos_1_times": 1,
-            #    "Level_up_any_Relic_1_times": 1,
             "Consume_1_Trailblaze_Power": 120
-
         }
 
         def replace_templates_quest(text: str, correct_time=1) -> str:
+            """
+            替换任务文本中的模板
+            
+            Args:
+                text: 原始文本
+                correct_time: 正确的完成次数
+                
+            Returns:
+                str: 处理后的文本
+            """
             text = replace_templates(text)
             text = text.replace('1', f'{correct_time}')
             return text
@@ -188,12 +240,17 @@ class KeywordExtract:
         return gen
 
     def generate_daily_quests(self):
+        """生成日常任务关键词"""
         daily_quest = read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'DailyQuest.json'))
         self.load_quests([str(deep_get(data, 'DailyID')) for data in daily_quest])
         self.write_daily_quest_keywords()
 
     def generate_shadow_with_characters(self):
-        # Damage type -> damage hash
+        """
+        生成角色阴影关键词
+        处理角色属性和伤害类型
+        """
+        # 伤害类型 -> 伤害哈希
         damage_info = dict()
         for data in read_file(os.path.join(
                 TextMap.DATA_FOLDER, 'ExcelOutput',
@@ -201,7 +258,8 @@ class KeywordExtract:
         )):
             type_name = deep_get(data, 'ID', 0)
             damage_info[type_name] = deep_get(data, 'DamageTypeName.Hash')
-        # Character id -> character hash & damage type
+            
+        # 角色ID -> 角色哈希和伤害类型
         character_info = dict()
         for data in read_file(os.path.join(
                 TextMap.DATA_FOLDER, 'ExcelOutput',
@@ -214,10 +272,21 @@ class KeywordExtract:
             damage_type = deep_get(data, 'DamageType')
             character_info[data['AvatarID']] = (
                 name_hash, damage_info[damage_type])
-        # Item id -> character id
+            
+        # 物品ID -> 角色ID
         promotion_info = defaultdict(list)
 
         def merge_same(data: list[dict], keyword) -> list:
+            """
+            合并相同关键词的数据
+            
+            Args:
+                data: 数据列表
+                keyword: 关键词
+                
+            Returns:
+                list: 合并后的数据
+            """
             mp = defaultdict(dict)
             for d in data:
                 length = len(mp[d[keyword]])
@@ -234,7 +303,8 @@ class KeywordExtract:
                 promotion_info[item_id].append(character_info[character_id])
             except KeyError:
                 pass
-        # Shadow hash -> item id
+                
+        # 阴影哈希 -> 物品ID
         shadow_info = dict()
         for data in merge_same(read_file(os.path.join(
                 TextMap.DATA_FOLDER, 'ExcelOutput',
@@ -246,6 +316,8 @@ class KeywordExtract:
             shadow_hash = deep_get(data, '0.Name.Hash')
             item_id = deep_get(data, '5.DisplayItemList')[-1]['ItemID']
             shadow_info[shadow_hash] = promotion_info[item_id]
+            
+        # 多语言前缀
         prefix_dict = {
             'cn': '晋阶材料：',
             'cht': '晉階材料：',
@@ -253,6 +325,8 @@ class KeywordExtract:
             'en': 'Ascension: ',
             'es': 'Ascension: '
         }
+        
+        # 生成关键词
         keyword_class = 'DungeonDetailed'
         output_file = './tasks/dungeon/keywords/dungeon_detailed.py'
         gen = CodeGenerator()
@@ -284,6 +358,7 @@ class KeywordExtract:
         self.clear_keywords()
 
     def generate_forgotten_hall_stages(self):
+        """生成忘却之庭关卡关键词"""
         keyword_class = "ForgottenHallStage"
         output_file = './tasks/forgotten_hall/keywords/stage.py'
         gen = CodeGenerator()
@@ -304,22 +379,26 @@ class KeywordExtract:
         self.clear_keywords()
 
     def generate_assignments(self):
+        """生成委托任务关键词"""
         from dev_tools.keywords.assignment import GenerateAssignment
         GenerateAssignment()()
 
     def generate_map_planes(self):
+        """生成地图平面关键词"""
         from dev_tools.keywords.map_world import GenerateMapWorld
         GenerateMapWorld()()
         from dev_tools.keywords.map_plane import GenerateMapPlane
         GenerateMapPlane()()
 
     def generate_character_keywords(self):
+        """生成角色相关关键词"""
         from dev_tools.keywords.character import GenerateCharacterList, GenerateCharacterHeight, GenerateCombatType
         GenerateCharacterList()()
         GenerateCharacterHeight()()
         GenerateCombatType()()
 
     def generate_battle_pass_quests(self):
+        """生成战斗通行证任务关键词"""
         battle_pass_quests = read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'BattlePassConfig.json'))
         latest_quests = list(battle_pass_quests)[-1]
         week_quest_list = deep_get(latest_quests, "WeekQuestList")
@@ -330,13 +409,17 @@ class KeywordExtract:
         self.write_keywords(keyword_class='BattlePassQuest', output_file='./tasks/battle_pass/keywords/quest.py')
 
     def generate_rogue_buff(self):
-        # paths
+        """
+        生成模拟宇宙祝福关键词
+        处理祝福类型和稀有度
+        """
+        # 命途
         aeons = read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'RogueAeonDisplay.json'))
         aeons_hash = [deep_get(aeon, 'RogueAeonPathName2.Hash') for aeon in aeons]
         self.keywords_id = aeons_hash
         self.write_keywords(keyword_class='RoguePath', output_file='./tasks/rogue/keywords/path.py')
 
-        # blessings
+        # 祝福
         blessings_info = read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'RogueBuff.json'))
         blessings_name_map = read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'RogueMazeBuff.json'))
         blessings_name_map = {
@@ -352,16 +435,26 @@ class KeywordExtract:
             for data in blessings_info if deep_get(data, 'MazeBuffLevel') == 1
         }
 
-        # ignore endless buffs
+        # 忽略无尽祝福
         endless_buffs = read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'RogueEndlessMegaBuffDesc.json'))
         endless_buff_ids = [int(deep_get(data, 'MazeBuffID')) for data in endless_buffs]
         blessings_id = [id_ for id_ in blessings_id if id_ not in endless_buff_ids]
 
         def get_blessing_infos(id_list, with_enhancement: bool):
+            """
+            获取祝福信息
+            
+            Args:
+                id_list: 祝福ID列表
+                with_enhancement: 是否包含强化信息
+                
+            Returns:
+                tuple: (祝福哈希列表, 额外属性字典)
+            """
             blessings_hash = [deep_get(blessings_name_map, f"{blessing_id}.BuffName.Hash")
                               for blessing_id in id_list]
             blessings_path_id = {blessing_hash: int(deep_get(blessings_info, f'{blessing_id}.RogueBuffType')) - 119
-                                 # 119 is the magic number make type match with path in keyword above
+                                 # 119是使类型与上面关键词中的路径匹配的魔法数字
                                  for blessing_hash, blessing_id in zip(blessings_hash, id_list)}
             blessings_category = {blessing_hash: deep_get(blessings_info, f'{blessing_id}.RogueBuffCategory')
                                   for blessing_hash, blessing_id in zip(blessings_hash, id_list)}
@@ -379,18 +472,24 @@ class KeywordExtract:
             else:
                 return blessings_hash, {'path_id': blessings_path_id, 'rarity': blessings_rarity}
 
+        # 生成祝福关键词
         hash_list, extra_attrs = get_blessing_infos(blessings_id, with_enhancement=True)
         self.keywords_id = hash_list
         self.write_keywords(keyword_class='RogueBlessing', output_file='./tasks/rogue/keywords/blessing.py',
                             text_convert=blessing_name, extra_attrs=extra_attrs)
 
+        # 生成共鸣关键词
         hash_list, extra_attrs = get_blessing_infos(resonances_id, with_enhancement=False)
         self.keywords_id = hash_list
         self.write_keywords(keyword_class='RogueResonance', output_file='./tasks/rogue/keywords/resonance.py',
                             text_convert=blessing_name, extra_attrs=extra_attrs)
 
     def generate_rogue_events(self):
-        # An event contains several options
+        """
+        生成模拟宇宙事件关键词
+        处理事件标题和选项
+        """
+        # 事件标题
         event_title_file = os.path.join(
             TextMap.DATA_FOLDER, 'ExcelOutput',
             'RogueTalkNameConfig.json'
@@ -405,6 +504,8 @@ class KeywordExtract:
                 continue
             _, title_text = self.find_keyword(title_hash, lang='en')
             event_title_texts[text_to_variable(title_text)].append(title_id)
+            
+        # 事件选项
         option_file = os.path.join(
             TextMap.DATA_FOLDER, 'ExcelOutput',
             'RogueDialogueOptionDisplay.json'
@@ -413,21 +514,38 @@ class KeywordExtract:
             str(deep_get(data, 'OptionDisplayID')): deep_get(data, 'OptionTitle.Hash')
             for data in read_file(option_file)
         }
-        # Key: event name hash, value: list of option id/hash
+        
+        # 按事件分组选项
         options_grouped = dict()
-        # Key: option md5, value: option text hash in StarRailData
         option_md5s = dict()
 
         @cache
         def get_option_md5(option_hash):
+            """
+            计算选项的MD5值
+            
+            Args:
+                option_hash: 选项哈希值
+                
+            Returns:
+                str: MD5值
+            """
             m = md5()
             for lang in UI_LANGUAGES:
                 option_text = self.find_keyword(option_hash, lang=lang)[1]
                 m.update(option_text.encode())
             return m.hexdigest()
 
-        # Drop invalid or duplicate options
         def clean_options(options):
+            """
+            清理选项列表，去除无效和重复选项
+            
+            Args:
+                options: 选项列表
+                
+            Yields:
+                str: 清理后的选项哈希值
+            """
             visited = set()
             for i in options:
                 option_hash = option_ids[str(i)]
@@ -441,18 +559,19 @@ class KeywordExtract:
                 visited.add(option_md5)
                 yield option_md5s[option_md5]
 
+        # 处理事件选项
         for group_title_ids in event_title_texts.values():
             group_option_ids = []
             for title_id in group_title_ids:
-                # Special case for Nildis (尼尔迪斯牌)
-                # Missing option: Give up
+                # 特殊处理：尼尔迪斯牌
+                # 缺少选项：放弃
                 if title_id == '13501':
                     group_option_ids.append(13506)
                 option_id = title_id
-                # title ids in Swarm Disaster (寰宇蝗灾) have a "1" prefix
+                # 寰宇蝗灾中的标题ID有"1"前缀
                 if option_id not in option_ids:
                     option_id = title_id[1:]
-                # Some title may not has corresponding options
+                # 某些标题可能没有对应的选项
                 if option_id not in option_ids:
                     continue
                 group_option_ids += list(itertools.takewhile(
@@ -463,11 +582,14 @@ class KeywordExtract:
                 title_hash = event_title_ids[group_title_ids[0]]
                 options_grouped[title_hash] = group_option_ids
 
+        # 清理选项
         for title_hash, options in options_grouped.items():
             options_grouped[title_hash] = list(clean_options(options))
         for title_hash in list(options_grouped.keys()):
             if len(options_grouped[title_hash]) == 0:
                 options_grouped.pop(title_hash)
+                
+        # 统计选项重复次数
         option_dup_count = defaultdict(int)
         for option_hash in option_md5s.values():
             if option_hash not in self.text_map['en']:
@@ -476,6 +598,16 @@ class KeywordExtract:
             option_dup_count[text_to_variable(option_text)] += 1
 
         def option_text_convert(option_md5, md5_prefix_len=4):
+            """
+            转换选项文本
+            
+            Args:
+                option_md5: 选项的MD5值
+                md5_prefix_len: MD5前缀长度
+                
+            Returns:
+                function: 文本转换函数
+            """
             def wrapper(option_text):
                 option_var = text_to_variable(option_text)
                 if option_dup_count[option_var] > 1:
@@ -484,8 +616,9 @@ class KeywordExtract:
 
             return wrapper
 
+        # 生成选项关键词
         option_gen = None
-        option_hash_to_keyword_id = dict()  # option hash -> option keyword id
+        option_hash_to_keyword_id = dict()  # 选项哈希 -> 选项关键词ID
         for i, (option_md5, option_hash) in enumerate(option_md5s.items(), start=1):
             self.load_keywords([option_hash])
             option_gen = self.write_keywords(
@@ -498,7 +631,7 @@ class KeywordExtract:
         print(f'Write {output_file}')
         option_gen.write(output_file)
 
-        # title hash -> option keyword id
+        # 生成事件标题关键词
         title_to_option_keyword_id = {
             title_hash: sorted(
                 option_hash_to_keyword_id[x] for x in option_hashes
@@ -510,6 +643,8 @@ class KeywordExtract:
             output_file='./tasks/rogue/keywords/event_title.py',
             extra_attrs={'option_ids': title_to_option_keyword_id}
         )
+        
+        # 检查导入
         try:
             from tasks.rogue.event.event import OcrRogueEventOption
         except AttributeError as e:
@@ -524,6 +659,16 @@ class KeywordExtract:
                 f'Importing preset strategies fails, probably due to changes in {output_file}')
 
     def iter_without_duplication(self, file: list, keys):
+        """
+        遍历不重复的数据
+        
+        Args:
+            file: 数据列表
+            keys: 键名
+            
+        Yields:
+            str: 不重复的哈希值
+        """
         visited = set()
         for data in file:
             hash_ = deep_get(data, keys=keys)
@@ -534,51 +679,123 @@ class KeywordExtract:
             yield hash_
 
     def generate(self):
+        """
+        生成所有关键词
+        包括：
+        1. 副本导航关键词
+        2. 副本标签关键词
+        3. 日常任务状态关键词
+        4. 战斗通行证任务状态关键词
+        5. 地图平面关键词
+        6. 角色关键词
+        7. 副本列表关键词
+        8. 副本入口关键词
+        9. 角色阴影关键词
+        10. 战斗通行证标签关键词
+        11. 战斗通行证任务标签关键词
+        12. 委托任务关键词
+        13. 忘却之庭关卡关键词
+        14. 日常任务关键词
+        15. 战斗通行证任务关键词
+        16. 物品标签关键词
+        17. 物品关键词
+        18. 遗器关键词
+        19. 模拟宇宙祝福关键词
+        20. 模拟宇宙强化关键词
+        21. 模拟宇宙奇物关键词
+        22. 模拟宇宙奖励关键词
+        23. 模拟宇宙事件关键词
+        """
+        # 副本导航关键词
         self.load_keywords(['饰品提取', '差分宇宙', '模拟宇宙',
                             '拟造花萼（金）', '拟造花萼（赤）', '凝滞虚影', '侵蚀隧洞', '历战余响',
                             '最近更新', '忘却之庭', '虚构叙事', '末日幻影'])
         self.write_keywords(keyword_class='DungeonNav', output_file='./tasks/dungeon/keywords/nav.py')
+        
+        # 副本标签关键词
         self.load_keywords(['行动摘要', '生存索引', '每日实训', '模拟宇宙', '逐光捡金', '战术训练'])
         self.write_keywords(keyword_class='DungeonTab', output_file='./tasks/dungeon/keywords/tab.py')
+        
+        # 日常任务状态关键词
         self.load_keywords(['前往', '领取', '进行中', '已领取', '本日活跃度已满'])
         self.write_keywords(keyword_class='DailyQuestState', output_file='./tasks/daily/keywords/daily_quest_state.py')
+        
+        # 战斗通行证任务状态关键词
         self.load_keywords(['领取', '追踪'])
         self.write_keywords(keyword_class='BattlePassQuestState',
                             output_file='./tasks/battle_pass/keywords/quest_state.py')
+        
+        # 地图平面关键词
         self.generate_map_planes()
+        
+        # 角色关键词
         self.generate_character_keywords()
+        
+        # 副本列表关键词
         from dev_tools.keywords.dungeon_list import GenerateDungeonList
         GenerateDungeonList()()
+        
+        # 副本入口关键词
         self.load_keywords(['进入', '传送', '追踪'])
         self.write_keywords(keyword_class='DungeonEntrance', output_file='./tasks/dungeon/keywords/dungeon_entrance.py')
+        
+        # 角色阴影关键词
         self.generate_shadow_with_characters()
+        
+        # 战斗通行证标签关键词
         self.load_keywords(['奖励', '任务', ])
         self.write_keywords(keyword_class='BattlePassTab', output_file='./tasks/battle_pass/keywords/tab.py')
+        
+        # 战斗通行证任务标签关键词
         self.load_keywords(['本周任务', '本期任务'])
         self.write_keywords(keyword_class='BattlePassMissionTab',
                             output_file='./tasks/battle_pass/keywords/mission_tab.py')
+        
+        # 委托任务关键词
         self.generate_assignments()
+        
+        # 忘却之庭关卡关键词
         self.generate_forgotten_hall_stages()
+        
+        # 日常任务关键词
         self.generate_daily_quests()
+        
+        # 战斗通行证任务关键词
         self.generate_battle_pass_quests()
+        
+        # 物品标签关键词
         self.load_keywords(['养成材料', '光锥', '遗器', '其他材料', '消耗品', '任务', '贵重物', '材料置换', '随宠'])
         self.write_keywords(keyword_class='ItemTab',
                             text_convert=lambda name: name.replace(' ', '').replace('LightCones', 'LightCone'),
                             output_file='./tasks/item/keywords/tab.py')
+        
+        # 物品关键词
         from dev_tools.keywords.item import generate_items
         generate_items()
+        
+        # 遗器关键词
         from dev_tools.keywords.relics import generate_relics
         generate_relics()
+        
+        # 模拟宇宙祝福关键词
         self.generate_rogue_buff()
+        
+        # 模拟宇宙强化关键词
         self.load_keywords(['已强化'])
         self.write_keywords(keyword_class='RogueEnhancement', output_file='./tasks/rogue/keywords/enhancement.py')
+        
+        # 模拟宇宙奇物关键词
         self.load_keywords(list(self.iter_without_duplication(
             read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'RogueMiracleDisplay.json')),
             'MiracleName.Hash')))
         self.write_keywords(keyword_class='RogueCurio', output_file='./tasks/rogue/keywords/curio.py')
+        
+        # 模拟宇宙奖励关键词
         self.load_keywords(list(self.iter_without_duplication(
             read_file(os.path.join(TextMap.DATA_FOLDER, 'ExcelOutput', 'RogueBonus.json')), 'BonusTitle.Hash')))
         self.write_keywords(keyword_class='RogueBonus', output_file='./tasks/rogue/keywords/bonus.py')
+        
+        # 模拟宇宙事件关键词
         self.generate_rogue_events()
 
 

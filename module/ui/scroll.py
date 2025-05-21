@@ -1,3 +1,17 @@
+"""
+滚动条处理模块
+
+功能：
+1. 处理游戏中的滚动条操作
+2. 支持垂直和水平滚动
+3. 提供滚动条位置检测和设置
+4. 支持自适应滚动条检测
+
+主要类：
+- Scroll: 基础滚动条类
+- AdaptiveScroll: 自适应滚动条类，用于处理动态变化的滚动条
+"""
+
 import numpy as np
 from scipy import signal
 
@@ -9,6 +23,15 @@ from module.logger import logger
 
 
 class Scroll:
+    """
+    滚动条类
+    
+    属性：
+        color_threshold: 颜色相似度阈值
+        drag_threshold: 拖动阈值
+        edge_threshold: 边缘阈值
+        edge_add: 边缘额外距离
+    """
     color_threshold = 221
     drag_threshold = 0.05
     edge_threshold = 0.05
@@ -16,11 +39,13 @@ class Scroll:
 
     def __init__(self, area, color, is_vertical=True, name='Scroll'):
         """
+        初始化滚动条
+        
         Args:
-            area (Button, tuple): A button or area of the whole scroll.
-            color (tuple): RGB of the scroll
-            is_vertical (bool): True if vertical, false if horizontal.
-            name (str):
+            area (Button, tuple): 滚动条区域，可以是Button对象或坐标元组
+            color (tuple): 滚动条颜色RGB值
+            is_vertical (bool): 是否为垂直滚动条
+            name (str): 滚动条名称
         """
         if isinstance(area, (Button, ButtonWrapper)):
             # name = area.name
@@ -41,11 +66,13 @@ class Scroll:
 
     def match_color(self, main):
         """
+        匹配滚动条颜色
+        
         Args:
-            main (ModuleBase):
-
+            main (ModuleBase): 主模块实例
+            
         Returns:
-            np.ndarray: Shape (n,), dtype bool.
+            np.ndarray: 布尔数组，表示匹配位置
         """
         image = main.image_crop(self.area, copy=False)
         image = color_similarity_2d(image, color=self.color)
@@ -55,11 +82,13 @@ class Scroll:
 
     def cal_position(self, main):
         """
+        计算滚动条当前位置
+        
         Args:
-            main (ModuleBase):
-
+            main (ModuleBase): 主模块实例
+            
         Returns:
-            float: 0 to 1.
+            float: 当前位置(0-1)
         """
         mask = self.match_color(main)
         middle = np.mean(np.where(mask)[0])
@@ -72,15 +101,14 @@ class Scroll:
 
     def position_to_screen(self, position, random_range=(-0.05, 0.05)):
         """
-        Convert scroll position to screen coordinates.
-        Call cal_position() or match_color() to get length, before calling this.
-
+        将滚动条位置转换为屏幕坐标
+        
         Args:
-            position (int, float):
-            random_range (tuple):
-
+            position (int, float): 目标位置
+            random_range (tuple): 随机范围
+            
         Returns:
-            tuple[int]: (upper_left_x, upper_left_y, bottom_right_x, bottom_right_y)
+            tuple[int]: 屏幕坐标区域 (x1, y1, x2, y2)
         """
         position = np.add(position, random_range)
         middle = position * (self.total - self.length) + self.length / 2
@@ -103,47 +131,67 @@ class Scroll:
 
     def appear(self, main):
         """
+        检查滚动条是否出现
+        
         Args:
-            main (ModuleBase):
-
+            main (ModuleBase): 主模块实例
+            
         Returns:
-            bool
+            bool: 是否出现
         """
         return np.mean(self.match_color(main)) > 0.1
 
     def is_draggable(self, main):
         """
-        If scroll `length` is just a little smaller than `total`,
-        game client may not respond to such a short swipe.
-
+        检查滚动条是否可拖动
+        如果滚动条长度接近总长度，可能无法响应拖动
+        
         Args:
-            main (ModuleBase):
-
+            main (ModuleBase): 主模块实例
+            
         Returns:
-            bool:
+            bool: 是否可拖动
         """
         _ = self.cal_position(main)
         return self.length / self.total < 0.95
 
     def at_top(self, main):
+        """
+        检查是否在顶部
+        
+        Args:
+            main (ModuleBase): 主模块实例
+            
+        Returns:
+            bool: 是否在顶部
+        """
         return self.cal_position(main) < self.edge_threshold
 
     def at_bottom(self, main):
+        """
+        检查是否在底部
+        
+        Args:
+            main (ModuleBase): 主模块实例
+            
+        Returns:
+            bool: 是否在底部
+        """
         return self.cal_position(main) > 1 - self.edge_threshold
 
     def set(self, position, main, random_range=(-0.05, 0.05), distance_check=True, skip_first_screenshot=True):
         """
-        Set scroll to a specific position.
-
+        设置滚动条位置
+        
         Args:
-            position (float, int): 0 to 1.
-            main (ModuleBase):
-            random_range (tuple(int, float)):
-            distance_check (bool): Whether to drop short swipes
-            skip_first_screenshot:
-
+            position (float, int): 目标位置(0-1)
+            main (ModuleBase): 主模块实例
+            random_range (tuple): 随机范围
+            distance_check (bool): 是否检查拖动距离
+            skip_first_screenshot (bool): 是否跳过首次截图
+            
         Returns:
-            bool: If dragged.
+            bool: 是否执行了拖动
         """
         logger.info(f'{self.name} set to {position}')
         self.drag_interval.clear()
@@ -182,20 +230,42 @@ class Scroll:
         return dragged
 
     def set_top(self, main, random_range=(-0.05, 0.05), skip_first_screenshot=True):
+        """
+        滚动到顶部
+        
+        Args:
+            main (ModuleBase): 主模块实例
+            random_range (tuple): 随机范围
+            skip_first_screenshot (bool): 是否跳过首次截图
+            
+        Returns:
+            bool: 是否执行了拖动
+        """
         return self.set(0.00, main=main, random_range=random_range, skip_first_screenshot=skip_first_screenshot)
 
     def set_bottom(self, main, random_range=(-0.05, 0.05), skip_first_screenshot=True):
+        """
+        滚动到底部
+        
+        Args:
+            main (ModuleBase): 主模块实例
+            random_range (tuple): 随机范围
+            skip_first_screenshot (bool): 是否跳过首次截图
+            
+        Returns:
+            bool: 是否执行了拖动
+        """
         return self.set(1.00, main=main, random_range=random_range, skip_first_screenshot=skip_first_screenshot)
 
     def drag_page(self, page, main, random_range=(-0.05, 0.05), skip_first_screenshot=True):
         """
-        Drag scroll forward or backward.
-
+        拖动指定页数
+        
         Args:
-            page (int, float): Relative position to drag. 1.0 means next page, -1.0 means previous page.
-            main (ModuleBase):
-            random_range (tuple[float]):
-            skip_first_screenshot:
+            page (int, float): 相对页数，1.0表示下一页，-1.0表示上一页
+            main (ModuleBase): 主模块实例
+            random_range (tuple): 随机范围
+            skip_first_screenshot (bool): 是否跳过首次截图
         """
         if not skip_first_screenshot:
             main.device.screenshot()
@@ -207,21 +277,56 @@ class Scroll:
         return self.set(target, main=main, random_range=random_range, skip_first_screenshot=True)
 
     def next_page(self, main, page=0.8, random_range=(-0.01, 0.01), skip_first_screenshot=True):
+        """
+        下一页
+        
+        Args:
+            main (ModuleBase): 主模块实例
+            page (float): 页数
+            random_range (tuple): 随机范围
+            skip_first_screenshot (bool): 是否跳过首次截图
+            
+        Returns:
+            bool: 是否执行了拖动
+        """
         return self.drag_page(page, main=main, random_range=random_range, skip_first_screenshot=skip_first_screenshot)
 
     def prev_page(self, main, page=0.8, random_range=(-0.01, 0.01), skip_first_screenshot=True):
+        """
+        上一页
+        
+        Args:
+            main (ModuleBase): 主模块实例
+            page (float): 页数
+            random_range (tuple): 随机范围
+            skip_first_screenshot (bool): 是否跳过首次截图
+            
+        Returns:
+            bool: 是否执行了拖动
+        """
         return self.drag_page(-page, main=main, random_range=random_range, skip_first_screenshot=skip_first_screenshot)
 
 
 class AdaptiveScroll(Scroll):
+    """
+    自适应滚动条类
+    
+    功能：
+    1. 自动检测滚动条位置
+    2. 处理动态变化的滚动条
+    3. 支持背景干扰处理
+    """
+    
     def __init__(self, area, parameters: dict = None, background=5, is_vertical=True, name='Scroll'):
         """
+        初始化自适应滚动条
+        
         Args:
-            area (Button, tuple): A button or area of the whole scroll.
-            parameters (dict): Parameters passing to scipy.find_peaks
-            background (int):
-            is_vertical (bool): True if vertical, false if horizontal.
-            name (str):
+            area (Button, tuple): 滚动条区域
+            parameters (dict): scipy.find_peaks的参数
+            background (int): 背景处理范围
+            is_vertical (bool): 是否为垂直滚动条
+            name (str): 滚动条名称
         """
         if parameters is None:
             parameters = {}
@@ -230,6 +335,15 @@ class AdaptiveScroll(Scroll):
         super().__init__(area, color=(255, 255, 255), is_vertical=is_vertical, name=name)
 
     def match_color(self, main):
+        """
+        匹配滚动条颜色，使用峰值检测
+        
+        Args:
+            main (ModuleBase): 主模块实例
+            
+        Returns:
+            np.ndarray: 布尔数组，表示匹配位置
+        """
         if self.is_vertical:
             area = (self.area[0] - self.background, self.area[1], self.area[2] + self.background, self.area[3])
             image = main.image_crop(area, copy=False)

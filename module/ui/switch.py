@@ -1,3 +1,16 @@
+"""
+开关处理模块
+
+功能：
+1. 处理游戏中的开关状态切换
+2. 支持单选和多选开关
+3. 提供状态检测和切换功能
+4. 支持重试机制
+
+主要类：
+- Switch: 开关类，用于处理游戏中的开关状态切换
+"""
+
 from module.base.base import ModuleBase
 from module.base.timer import Timer
 from module.exception import ScriptError
@@ -6,26 +19,34 @@ from module.logger import logger
 
 class Switch:
     """
-    A wrapper to handle switches in game, switch among states with retries.
-
-    Examples:
-        # Definitions
+    开关类
+    
+    功能：
+    1. 处理游戏中的开关状态切换
+    2. 支持状态检测和切换
+    3. 提供重试机制
+    
+    示例：
+        # 定义开关
         submarine_hunt = Switch('Submarine_hunt', offset=120)
         submarine_hunt.add_state('on', check_button=SUBMARINE_HUNT_ON)
         submarine_hunt.add_state('off', check_button=SUBMARINE_HUNT_OFF)
 
-        # Change state to ON
+        # 切换到开启状态
         submarine_view.set('on', main=self)
     """
 
     def __init__(self, name='Switch', is_selector=False):
         """
+        初始化开关
+        
         Args:
-            name (str):
-            is_selector (bool): True if this is a multi choice, click to choose one of the switches.
-                For example: | [Daily] | Urgent | -> click -> | Daily | [Urgent] |
-                False if this is a switch, click the switch itself, and it changed in the same position.
-                For example: | [ON] | -> click -> | [OFF] |
+            name (str): 开关名称
+            is_selector (bool): 是否为选择器
+                True: 多选开关，点击选择其中一个状态
+                例如: | [Daily] | Urgent | -> 点击 -> | Daily | [Urgent] |
+                False: 普通开关，点击切换状态
+                例如: | [ON] | -> 点击 -> | [OFF] |
         """
         self.name = name
         self.is_selector = is_selector
@@ -33,10 +54,12 @@ class Switch:
 
     def add_state(self, state, check_button, click_button=None):
         """
+        添加开关状态
+        
         Args:
-            state (str): State name but cannot use 'unknown' as state name
-            check_button (ButtonWrapper):
-            click_button (ButtonWrapper):
+            state (str): 状态名称，不能使用'unknown'作为状态名
+            check_button (ButtonWrapper): 用于检测状态的按钮
+            click_button (ButtonWrapper): 用于点击切换状态的按钮，默认与check_button相同
         """
         if state == 'unknown':
             raise ScriptError(f'Cannot use "unknown" as state name')
@@ -48,11 +71,13 @@ class Switch:
 
     def appear(self, main):
         """
+        检查开关是否出现
+        
         Args:
-            main (ModuleBase):
-
+            main (ModuleBase): 主模块实例
+            
         Returns:
-            bool
+            bool: 开关是否出现
         """
         for data in self.state_list:
             if main.appear(data['check_button']):
@@ -62,11 +87,13 @@ class Switch:
 
     def get(self, main):
         """
+        获取当前状态
+        
         Args:
-            main (ModuleBase):
-
+            main (ModuleBase): 主模块实例
+            
         Returns:
-            str: state name or 'unknown'.
+            str: 当前状态名称，如果未检测到则返回'unknown'
         """
         for data in self.state_list:
             if main.appear(data['check_button']):
@@ -76,23 +103,27 @@ class Switch:
 
     def click(self, state, main):
         """
+        点击切换状态
+        
         Args:
-            state (str):
-            main (ModuleBase):
+            state (str): 目标状态
+            main (ModuleBase): 主模块实例
         """
         button = self.get_data(state)['click_button']
         main.device.click(button)
 
     def get_data(self, state):
         """
+        获取状态数据
+        
         Args:
-            state (str):
-
+            state (str): 状态名称
+            
         Returns:
-            dict: Dictionary in add_state
-
+            dict: 状态数据字典
+            
         Raises:
-            ScriptError: If state invalid
+            ScriptError: 当状态无效时抛出异常
         """
         for row in self.state_list:
             if row['state'] == state:
@@ -102,23 +133,27 @@ class Switch:
 
     def handle_additional(self, main):
         """
+        处理额外的弹窗
+        
         Args:
-            main (ModuleBase):
-
+            main (ModuleBase): 主模块实例
+            
         Returns:
-            bool: If handled
+            bool: 是否处理了弹窗
         """
         return False
 
     def set(self, state, main, skip_first_screenshot=True):
         """
+        设置开关状态
+        
         Args:
-            state:
-            main (ModuleBase):
-            skip_first_screenshot (bool):
-
+            state (str): 目标状态
+            main (ModuleBase): 主模块实例
+            skip_first_screenshot (bool): 是否跳过首次截图
+            
         Returns:
-            bool: If clicked
+            bool: 是否执行了点击操作
         """
         logger.info(f'{self.name} set to {state}')
         self.get_data(state)
@@ -133,45 +168,46 @@ class Switch:
             else:
                 main.device.screenshot()
 
-            # Detect
+            # 检测当前状态
             current = self.get(main=main)
             logger.attr(self.name, current)
 
-            # End
+            # 达到目标状态
             if current == state:
                 return changed
 
-            # Handle additional popups
+            # 处理额外弹窗
             if self.handle_additional(main=main):
                 continue
 
-            # Warning
+            # 处理未知状态
             if current == 'unknown':
                 if unknown_timer.reached():
                     logger.warning(f'Switch {self.name} has states evaluated to unknown, '
                                    f'asset should be re-verified')
                     has_unknown = True
                     unknown_timer.reset()
-                # If unknown_timer never reached, don't click when having an unknown state,
-                # the unknown state is probably the switching animation.
-                # If unknown_timer reached once, click target state ignoring whether state is unknown or not,
-                # the unknown state is probably a new state not yet added.
-                # By ignoring new states, Switch.set() can still switch among known states.
+                # 如果unknown_timer未触发，在未知状态时不点击
+                # 未知状态可能是切换动画
+                # 如果unknown_timer已触发一次，忽略未知状态直接点击目标状态
+                # 未知状态可能是未添加的新状态
+                # 通过忽略新状态，Switch.set()仍可以在已知状态间切换
                 if not has_unknown:
                     continue
             else:
-                # Known state, reset timer
+                # 已知状态，重置计时器
                 unknown_timer.reset()
 
-            # Click
+            # 执行点击
             if click_timer.reached():
                 if self.is_selector:
-                    # Click target state to switch
+                    # 选择器模式：点击目标状态切换
                     click_state = state
                 else:
-                    # If this is a selector, click on current state to switch to another
-                    # But 'unknown' is not clickable, if it is, click target state instead
-                    # assuming all selector states share the same position.
+                    # 普通开关模式：
+                    # 如果是选择器，点击当前状态切换到另一个
+                    # 但'unknown'不可点击，如果可点击则点击目标状态
+                    # 假设所有选择器状态共享相同位置
                     if current == 'unknown':
                         click_state = state
                     else:
@@ -185,14 +221,14 @@ class Switch:
 
     def wait(self, main, skip_first_screenshot=True):
         """
-        Wait until any state activated
-
+        等待任意状态激活
+        
         Args:
-            main (ModuleBase):
-            skip_first_screenshot:
-
+            main (ModuleBase): 主模块实例
+            skip_first_screenshot (bool): 是否跳过首次截图
+            
         Returns:
-            bool: If success
+            bool: 是否成功等待到状态激活
         """
         timeout = Timer(2, count=6).start()
         while 1:
@@ -201,17 +237,17 @@ class Switch:
             else:
                 main.device.screenshot()
 
-            # Detect
+            # 检测当前状态
             current = self.get(main=main)
             logger.attr(self.name, current)
 
-            # End
+            # 状态已激活
             if current != 'unknown':
                 return True
             if timeout.reached():
                 logger.warning(f'{self.name} wait activated timeout')
                 return False
 
-            # Handle additional popups
+            # 处理额外弹窗
             if self.handle_additional(main=main):
                 continue

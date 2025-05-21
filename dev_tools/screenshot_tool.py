@@ -11,7 +11,7 @@ from module.device.device import Device
 from module.logger import logger
 
 """
-设备截图工具
+设备截图工具 (Screenshot Tool)
 
 功能：
 1. 自动检测并连接设备
@@ -20,7 +20,7 @@ from module.logger import logger
 4. 按时间戳保存截图
 
 使用方法：
-    python -m dev_tools.screenshot
+    python -m dev_tools.screenshot_tool
 """
 
 

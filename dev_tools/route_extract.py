@@ -1,3 +1,15 @@
+"""
+路由提取工具
+
+功能：
+1. 从代码中提取路由信息
+2. 生成路由配置文件
+3. 处理模拟宇宙和饰品相关的路由数据
+
+使用方法：
+    python -m dev_tools.route_extract
+"""
+
 import os
 import re
 from typing import Iterator
@@ -14,10 +26,31 @@ from tasks.rogue.route.model import RogueRouteListModel, RogueRouteModel, RogueW
 
 
 class RouteExtract:
+    """
+    路由提取器
+    
+    功能：
+    1. 遍历指定文件夹下的所有Python文件
+    2. 提取文件中的路由定义
+    3. 生成路由配置文件
+    """
+    
     def __init__(self, folder):
+        """
+        初始化路由提取器
+        
+        Args:
+            folder: 要处理的文件夹路径
+        """
         self.folder = folder
 
     def iter_files(self) -> Iterator[str]:
+        """
+        遍历文件夹下的所有Python文件
+        
+        Yields:
+            str: Python文件的完整路径
+        """
         for path, folders, files in os.walk(self.folder):
             path = path.replace('\\', '/')
             for file in files:
@@ -25,6 +58,20 @@ class RouteExtract:
                     yield f'{path}/{file}'
 
     def extract_route(self, file) -> Iterator[RouteModel]:
+        """
+        从文件中提取路由信息
+        
+        提取规则：
+        1. 查找包含map_init的函数定义
+        2. 解析plane、floor和position参数
+        3. 生成路由模型
+        
+        Args:
+            file: 要处理的文件路径
+            
+        Yields:
+            RouteModel: 路由模型实例
+        """
         print(f'Extract {file}')
         with open(file, 'r', encoding='utf-8') as f:
             content = f.read()
@@ -72,14 +119,22 @@ class RouteExtract:
 
     def iter_route(self):
         """
+        遍历所有路由
+        
         Yields:
-            RouteData
+            RouteModel: 路由模型实例
         """
         for f in self.iter_files():
             for row in self.extract_route(f):
                 yield row
 
     def write(self, file):
+        """
+        将提取的路由信息写入文件
+        
+        Args:
+            file: 输出文件路径
+        """
         gen = CodeGenerator()
         gen.Import("""
         from tasks.map.route.model import RouteModel
@@ -94,6 +149,13 @@ class RouteExtract:
 
 
 def model_to_json(model, file):
+    """
+    将模型转换为JSON格式并保存
+    
+    Args:
+        model: 要转换的模型
+        file: 输出文件路径
+    """
     content = model.model_dump_json(indent=2)
     with open(file, 'w', encoding='utf-8', newline='') as f:
         f.write(content)
@@ -103,6 +165,15 @@ regex_posi = re.compile(r'_?X(\d+)Y(\d+)')
 
 
 def get_position_from_name(name):
+    """
+    从名称中提取坐标
+    
+    Args:
+        name: 包含坐标的名称
+        
+    Returns:
+        tuple: (x, y)坐标
+    """
     res = regex_posi.search(name)
     if res:
         position = int(res.group(1)), int(res.group(2))
@@ -113,12 +184,14 @@ def get_position_from_name(name):
 
 def position2direction(target, origin):
     """
+    计算从起点到目标点的方向角度
+    
     Args:
-        target: Target position (x, y)
-        origin: Origin position (x, y)
+        target: 目标位置 (x, y)
+        origin: 起点位置 (x, y)
 
     Returns:
-        float: Direction from current position to target position (0~360)
+        float: 方向角度 (0~360)
     """
     diff = np.subtract(target, origin)
     distance = np.linalg.norm(diff)
@@ -132,6 +205,17 @@ def position2direction(target, origin):
 
 
 def swap_exit(exit_, exit1, exit2):
+    """
+    根据角度关系交换两个出口的顺序
+    
+    Args:
+        exit_: 主出口
+        exit1: 第一个出口
+        exit2: 第二个出口
+        
+    Returns:
+        tuple: 排序后的出口对
+    """
     diff = position2direction(exit1.position, exit_.position) - position2direction(exit2.position, exit_.position)
     diff = diff % 360
     if diff > 180:
@@ -143,9 +227,24 @@ def swap_exit(exit_, exit1, exit2):
 
 
 class RouteDetect:
+    """
+    路由检测器
+    
+    功能：
+    1. 处理模拟宇宙和饰品的路由数据
+    2. 预测路径点位置和方向
+    3. 生成路由代码
+    """
+    
     GEN_END = '===== End of generated waypoints ====='
 
     def __init__(self, folder):
+        """
+        初始化路由检测器
+        
+        Args:
+            folder: 路由数据文件夹路径
+        """
         self.folder = os.path.abspath(folder)
         print(self.folder)
         self.waypoints = SelectedGrids(list(self.iter_image()))
@@ -153,13 +252,29 @@ class RouteDetect:
 
     @cached_property
     def detector(self):
+        """获取小地图检测器"""
         from tasks.rogue.route.loader import MinimapWrapper
         return MinimapWrapper()
 
     def get_minimap(self, route: RogueWaypointModel):
+        """
+        获取指定路由的小地图
+        
+        Args:
+            route: 路由模型
+            
+        Returns:
+            MinimapWrapper: 小地图检测器实例
+        """
         return self.detector.all_minimap[route.plane_floor]
 
     def iter_image(self) -> Iterator[RogueWaypointModel]:
+        """
+        遍历所有路径点图片
+        
+        Yields:
+            RogueWaypointModel: 路径点模型实例
+        """
         for domain_folder in iter_folder(self.folder, is_dir=True):
             domain = os.path.basename(domain_folder)
             for route_folder in iter_folder(domain_folder, is_dir=True):
@@ -186,7 +301,6 @@ class RouteDetect:
                         file_position = get_position_from_name(waypoint)
                         if file_position != (0, 0):
                             position = file_position
-                            # waypoint = regex_posi.sub('', waypoint)
                         elif waypoint != 'spawn':
                             position = (0, 0)
                         model = RogueWaypointModel(
@@ -202,11 +316,20 @@ class RouteDetect:
                             rotation=0,
                         )
                         yield model
-                        # deep_set(out, keys=[image.route, image.waypoint], value=image)
                 except FileNotFoundError:
                     pass
 
     def predict(self):
+        """
+        预测路径点的位置和方向
+        
+        处理流程：
+        1. 遍历所有路径点
+        2. 使用小地图检测器更新位置和方向
+        3. 检查位置变化
+        4. 排序路径点
+        5. 检查路径点间距
+        """
         for waypoint in tqdm(self.waypoints.grids):
             waypoint: RogueWaypointModel = waypoint
             minimap = self.get_minimap(waypoint)
@@ -228,7 +351,7 @@ class RouteDetect:
                           f' -> {name}_{waypoint.positionXY}')
 
         self.waypoints.create_index('domain', 'route')
-        # Sort by distance
+        # 按距离排序
         total = self.waypoints.filter(lambda x: (x.is_DomainCombat or x.is_DomainOccurrence) and x.is_spawn).count
         migrated = 0
         for waypoints in self.waypoints.indexes.values():
@@ -237,7 +360,7 @@ class RouteDetect:
             waypoints = self.sort_waypoints(waypoints.grids)
             for index, waypoint in enumerate(waypoints):
                 waypoint.index = index
-            # Waypoints too far from each other, probably wrong position
+            # 检查路径点间距
             diff = SelectedGrids(waypoints).get('position')
             diff = np.linalg.norm(np.diff(diff, axis=0), axis=1)
             for index in np.where(diff > 120)[0]:
@@ -248,6 +371,20 @@ class RouteDetect:
 
     @staticmethod
     def sort_waypoints(waypoints: list[RogueWaypointModel]) -> list[RogueWaypointModel]:
+        """
+        对路径点进行排序
+        
+        排序规则：
+        1. 按路径点名称排序
+        2. 处理中间路径点
+        3. 处理出口路径点
+        
+        Args:
+            waypoints: 要排序的路径点列表
+            
+        Returns:
+            list: 排序后的路径点列表
+        """
         waypoints = sorted(waypoints, key=lambda point: point.waypoint)
         middle = [point for point in waypoints if point.is_middle]
         if not middle:
@@ -276,10 +413,20 @@ class RouteDetect:
         return waypoints
 
     def write(self):
+        """将路径点数据写入JSON文件"""
         waypoints = RogueWaypointListModel(self.waypoints.grids)
         model_to_json(waypoints, f'{self.folder}/data.json')
 
     def gen_route(self, waypoints: SelectedGrids):
+        """
+        生成路由代码
+        
+        Args:
+            waypoints: 路径点集合
+            
+        Returns:
+            str: 生成的路由代码
+        """
         gen = CodeGenerator()
 
         spawn: RogueWaypointModel = waypoints.select(is_spawn=True).first_or_none()
@@ -292,6 +439,7 @@ class RouteDetect:
                 return ''
 
         class WaypointRepr:
+            """路径点表示类"""
             def __init__(self, position):
                 if isinstance(position, RogueWaypointModel):
                     position = position.position
@@ -303,6 +451,7 @@ class RouteDetect:
             __str__ = __repr__
 
         def call(func, name):
+            """生成函数调用代码"""
             ws = waypoints.filter(lambda x: x.waypoint.startswith(name)).get('waypoint')
             if ws:
                 ws = ', '.join(ws)
@@ -366,13 +515,20 @@ class RouteDetect:
         return gen.generate()
 
     def insert(self, folder, base='tasks.map.route.base'):
-        # Create folder
+        """
+        将生成的路由代码插入到文件中
+        
+        Args:
+            folder: 输出文件夹路径
+            base: 基础路由类路径
+        """
+        # 创建文件夹
         self.waypoints.create_index('domain')
         for index, waypoints in self.waypoints.indexes.items():
             domain = index[0]
             os.makedirs(f'{folder}/{domain}', exist_ok=True)
 
-        # Create file
+        # 创建文件
         self.waypoints.create_index('domain', 'plane', 'floor')
         for index, waypoints in self.waypoints.indexes.items():
             domain, plane, floor = index
@@ -384,7 +540,6 @@ class RouteDetect:
                 """)
                 with gen.Class('Route', inherit='RouteBase'):
                     pass
-                    # gen.Pass()
                 gen.write(file)
 
         for index, routes in self.waypoints.indexes.items():
@@ -467,6 +622,12 @@ class RouteDetect:
 
 
 def rogue_extract(folder):
+    """
+    提取模拟宇宙路由
+    
+    Args:
+        folder: 路由数据文件夹路径
+    """
     print('rogue_extract')
 
     def iter_route():
@@ -482,15 +643,18 @@ def rogue_extract(folder):
 
 
 if __name__ == '__main__':
+    # 处理日常路由
     os.chdir(os.path.join(os.path.dirname(__file__), '../'))
     RouteExtract('./route/daily').write('./tasks/map/route/route/daily.py')
 
+    # 处理模拟宇宙路由
     self = RouteDetect('../SrcRoute/rogue')
     self.predict()
     self.write()
     self.insert('./route/rogue', base='tasks.rogue.route.base')
     rogue_extract('./route/rogue')
 
+    # 处理饰品路由
     self = RouteDetect('../SrcRoute/ornament')
     self.predict()
     self.write()

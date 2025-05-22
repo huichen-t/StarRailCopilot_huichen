@@ -36,7 +36,7 @@ def gui_lang_to_ingame_lang(lang: str) -> str:
     return DICT_GUI_TO_INGAME.get(lang, 'en')
 
 def get_generator():
-    from module.base.code_generator import CodeGenerator
+    from module.editor.base.code_generator import CodeGenerator
     return CodeGenerator()
 
 class ConfigGenerator:

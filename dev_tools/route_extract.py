@@ -17,7 +17,7 @@ from typing import Iterator
 import numpy as np
 from tqdm import tqdm
 
-from module.base.code_generator import CodeGenerator, MarkdownGenerator
+from module.editor.base.code_generator import CodeGenerator, MarkdownGenerator
 from module.base.decorator import cached_property
 from module.base.utils import SelectedGrids, load_image
 from module.config.utils import iter_folder

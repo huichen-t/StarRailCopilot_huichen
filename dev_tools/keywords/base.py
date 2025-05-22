@@ -3,7 +3,7 @@ import re
 import typing as t
 from functools import cached_property
 
-from module.base.code_generator import CodeGenerator
+from module.editor.base.code_generator import CodeGenerator
 from module.config.utils import read_file
 from module.logger import logger
 

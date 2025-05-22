@@ -7,7 +7,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 
-from module.base.code_generator import CodeGenerator
+from module.editor.base.code_generator import CodeGenerator
 from module.base.utils import (
     SelectedGrids, area_center, area_limit, area_pad, corner2area, get_bbox, get_color, image_size, load_image)
 from module.config.config_manual import ManualConfig as AzurLaneConfig
